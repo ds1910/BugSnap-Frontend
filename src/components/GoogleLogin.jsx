@@ -1,5 +1,6 @@
 import React from "react";
-
+import axios from "axios";
+const backendUrl = import.meta.env.VITE_BACKEND_URL;
 /**
  * GoogleLogin Component
  * 
@@ -12,12 +13,29 @@ const GoogleLogin = () => {
   // ============================
   // Handle Google Login Button
   // ============================
-  const handleGoogleLogin = () => {
-    // Redirect to backend Google OAuth route
-    // console.log("GoogleLogin component rendered");
-    // Backend will handle OAuth flow and redirect back to frontend
-    window.location.href = "http://localhost:8019/auth/google";
-  };
+
+
+const handleGoogleLogin = async () => {
+  try {
+  //  console.log("Starting Google login...");
+
+    const response = await axios.get(`${backendUrl}auth/google`, {
+      withCredentials: true, // needed if backend sets cookies
+    });
+
+    console.log("Google login response:", response.data);
+
+    // If backend sends redirect URL, follow it
+    if (response.data?.redirectUrl) {
+      window.location.href = response.data.redirectUrl;
+    } else {
+      console.warn("No redirect URL received from backend.");
+    }
+  } catch (error) {
+    console.error("Google login failed:", error.response?.data || error.message);
+  }
+};
+
 
   // ============================
   // Render Login Button

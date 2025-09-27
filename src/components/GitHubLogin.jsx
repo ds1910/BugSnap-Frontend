@@ -1,4 +1,6 @@
 import React from 'react';
+import axios from "axios";
+const backendUrl = import.meta.env.VITE_BACKEND_URL;
 
 /**
  * GitHubLogin Component
@@ -12,12 +14,29 @@ const GitHubLogin = () => {
   // ============================
   // Handle GitHub Login Button
   // ============================
-  const handleGitHubLogin = () => {
-    // Redirect to backend GitHub OAuth route
-    // Backend will handle the OAuth flow and redirect back to frontend
-     console.log("GitHubLogin component rendered 2");
-    window.location.href = "http://localhost:8019/auth/github";
-  };
+
+const handleGitHubLogin = async () => {
+//  console.log("GitHub login initiated");
+
+  try {
+    const response = await axios.get("http://localhost:8019/auth/github", {
+      withCredentials: true, // only if your backend sets cookies / session
+    });
+
+    console.log("GitHub login response:", response.data);
+
+    if (response.data?.redirectUrl) {
+      console.log("Redirecting to:", response.data.redirectUrl);
+      window.location.href = response.data.redirectUrl;
+    } else {
+      console.warn("No redirect URL in response; falling back to direct redirect.");
+      window.location.href = "http://localhost:8019/auth/github";
+    }
+  } catch (err) {
+    console.error("Error during GitHub login:", err.response?.data || err.message);
+  }
+};
+
 
   // ============================
   // Render Login Button
