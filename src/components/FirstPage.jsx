@@ -527,7 +527,7 @@ useEffect(() => {
       ],
     },
     about: {
-      title: "Why I Built BugSnap",
+      title: "Why I Built bugSnap",
       text: `As a passionate solo developer, I built BugSnap out of a personal need for a tool that was both powerful and a joy to use. This isn't just a project; it's a solution crafted for builders, by a builder. I spent countless hours turning a simple idea into a platform that addresses the real-world frustrations of bug tracking.`,
     },
     features: [
@@ -647,7 +647,7 @@ useEffect(() => {
               />
             </svg>
             <span className="text-2xl font-bold text-gray-900 logo-text">
-              BugSnap
+              bugSnap
             </span>
           </div>
           <div className="hidden md:flex items-center space-x-8 nav-links">
@@ -724,7 +724,7 @@ useEffect(() => {
               >
                 <p>
                   <span className="font-bold text-gray-800">{userCount}+</span>{" "}
-                  developers trust BugSnap!
+                  developers trust bugSnap!
                 </p>
               </div>
             </div>
@@ -837,7 +837,7 @@ useEffect(() => {
               <div className="feature-panel panel-peach">
                 <h3>Centralized Collaboration</h3>
                 <p className="lead">
-                  Bugs shouldn’t slow teamwork. With BugSnap, every report
+                  Bugs shouldn’t slow teamwork. With bugSnap, every report
                   becomes a shared workspace — where details, discussions, and
                   updates stay connected to the issue itself. No switching
                   tools, no missing context.
@@ -845,7 +845,7 @@ useEffect(() => {
                 <br />
                 
                 <div className="why">
-                  Why BugSnap? We turn bug reports into clear, actionable tasks.
+                  Why bugSnap? We turn bug reports into clear, actionable tasks.
                   Assign owners, track progress, and keep everyone aligned — all
                   in one place, without the clutter of scattered apps.
                 </div>
@@ -862,7 +862,7 @@ useEffect(() => {
                 </p>
                 <br />
                 <div className="why">
-                  Why BugSnap? Our AI is built for developers — context-aware,
+                  Why bugSnap? Our AI is built for developers — context-aware,
                   reliable, and seamlessly embedded in your workflow. No extra
                   tabs, just faster fixes and clearer collaboration.
                 </div>
@@ -901,7 +901,7 @@ useEffect(() => {
       {/* Footer */}
       <footer className="bg-gray-100 py-8">
         <div className="container mx-auto px-4 md:px-8 text-center text-gray-500">
-          <p>&copy; 2025 BugSnap. All rights reserved.</p>
+          <p>&copy; 2025 bugSnap. All rights reserved.</p>
         </div>
       </footer>
     </div>
