@@ -7,6 +7,8 @@ import React, {
 } from "react";
 import commentApi from "./comment";
 import CommentItem from "./CommentItem";
+import axios from "axios";
+const backendUrl = import.meta.env.VITE_BACKEND_URL;
 
 // Toast component (stacked + queued behavior)
 const MAX_VISIBLE_TOASTS = 3;
@@ -241,7 +243,8 @@ const normalizeComments = (arr = []) => {
   });
 };
 
-const generateId = () => Date.now() + "_" + Math.random().toString(36).slice(2, 9);
+const generateId = () =>
+  Date.now() + "_" + Math.random().toString(36).slice(2, 9);
 
 // Main Comments component
 const Comments = ({ bug = {}, updateBug = null }) => {
@@ -543,9 +546,13 @@ const Comments = ({ bug = {}, updateBug = null }) => {
           await commentApi.deleteComment({ commentId, teamId });
 
           // Deletion succeeded -> ensure it's removed in state (defensive)
-          const stillThere = (commentsRef.current || []).some((c) => c.id === commentId);
+          const stillThere = (commentsRef.current || []).some(
+            (c) => c.id === commentId
+          );
           if (stillThere) {
-            const after = (commentsRef.current || []).filter((c) => c.id !== commentId);
+            const after = (commentsRef.current || []).filter(
+              (c) => c.id !== commentId
+            );
             updateLocalStorage(after);
           }
 
@@ -570,7 +577,9 @@ const Comments = ({ bug = {}, updateBug = null }) => {
 
           pushToast({
             title: "Error",
-            message: `Could not delete comment by ${removed.author || "someone"}`,
+            message: `Could not delete comment by ${
+              removed.author || "someone"
+            }`,
             canUndo: false,
           });
 
@@ -703,7 +712,13 @@ const Comments = ({ bug = {}, updateBug = null }) => {
         meta: { pendingId },
       });
     },
-    [updateLocalStorage, pushToast, cleanupToastByPendingId, getTeamId, removeReplyFromState]
+    [
+      updateLocalStorage,
+      pushToast,
+      cleanupToastByPendingId,
+      getTeamId,
+      removeReplyFromState,
+    ]
   );
 
   // Add comment
@@ -712,7 +727,8 @@ const Comments = ({ bug = {}, updateBug = null }) => {
     if (!text) return;
 
     const teamId = getTeamId();
-    const bugId = bug._id || JSON.parse(localStorage.getItem(bugKey) || "{}")._id;
+    const bugId =
+      bug._id || JSON.parse(localStorage.getItem(bugKey) || "{}")._id;
 
     try {
       const savedComment = await commentApi.createComment({
@@ -751,7 +767,8 @@ const Comments = ({ bug = {}, updateBug = null }) => {
       if (!text) return;
 
       const teamId = getTeamId();
-      const bugId = bug._id || JSON.parse(localStorage.getItem(bugKey) || "{}")._id;
+      const bugId =
+        bug._id || JSON.parse(localStorage.getItem(bugKey) || "{}")._id;
 
       try {
         const savedReply = await commentApi.createReply({
@@ -825,7 +842,20 @@ const Comments = ({ bug = {}, updateBug = null }) => {
       }
 
       try {
-        const res = await commentApi.updateComment({ commentId: id, text: trimmed });
+        const storedBug = JSON.parse(localStorage.getItem("selectedBug"));
+        if (!storedBug)
+          throw new Error("No selected bug found in localStorage");
+
+        const res = await axios.patch(
+          `${backendUrl}/manage/${id}`, // matches your backend route
+          {
+            text: newText,
+            bug: storedBug, // send the selected bug in request body
+          },
+          {
+            withCredentials: true, // send cookies for authentication
+          }
+        );
 
         let updatedFromServer = null;
         if (res && res.data) {
@@ -849,7 +879,10 @@ const Comments = ({ bug = {}, updateBug = null }) => {
           if (c.replies && c.replies.length) {
             const newReplies = c.replies.map((r) =>
               r.id === id
-                ? { ...r, text: updatedFromServer ? updatedFromServer.text : trimmed }
+                ? {
+                    ...r,
+                    text: updatedFromServer ? updatedFromServer.text : trimmed,
+                  }
                 : r
             );
             return { ...c, replies: newReplies };
