@@ -19,7 +19,7 @@ const handleGoogleLogin = async () => {
   try {
   //  console.log("Starting Google login...");
 
-    const response = await axios.get(`${backendUrl}auth/google`, {
+    const response = await axios.get(`${backendUrl}/auth/google`, {
       withCredentials: true, // needed if backend sets cookies
     });
 

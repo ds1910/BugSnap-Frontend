@@ -19,7 +19,7 @@ const handleGitHubLogin = async () => {
 //  console.log("GitHub login initiated");
 
   try {
-      const response = await axios.get(`${backendUrl}auth/github`, {
+      const response = await axios.get(`${backendUrl}/auth/github`, {
       withCredentials: true, // needed if backend sets cookies
     });
     console.log("GitHub login response:", response.data);
