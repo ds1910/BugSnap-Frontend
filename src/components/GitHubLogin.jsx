@@ -19,10 +19,9 @@ const handleGitHubLogin = async () => {
 //  console.log("GitHub login initiated");
 
   try {
-    const response = await axios.get("http://localhost:8019/auth/github", {
-      withCredentials: true, // only if your backend sets cookies / session
+      const response = await axios.get(`${backendUrl}auth/github`, {
+      withCredentials: true, // needed if backend sets cookies
     });
-
     console.log("GitHub login response:", response.data);
 
     if (response.data?.redirectUrl) {
@@ -30,7 +29,7 @@ const handleGitHubLogin = async () => {
       window.location.href = response.data.redirectUrl;
     } else {
       console.warn("No redirect URL in response; falling back to direct redirect.");
-      window.location.href = "http://localhost:8019/auth/github";
+   //   window.location.href = "http://localhost:8019/auth/github";
     }
   } catch (err) {
     console.error("Error during GitHub login:", err.response?.data || err.message);

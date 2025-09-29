@@ -647,7 +647,7 @@ useEffect(() => {
               />
             </svg>
             <span className="text-2xl font-bold text-gray-900 logo-text">
-              bugSnap-1111
+              bugSnap
             </span>
           </div>
           <div className="hidden md:flex items-center space-x-8 nav-links">
