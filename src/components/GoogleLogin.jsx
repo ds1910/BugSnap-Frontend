@@ -15,25 +15,9 @@ const GoogleLogin = () => {
   // ============================
 
 
-const handleGoogleLogin = async () => {
-  try {
-  //  console.log("Starting Google login...");
-
-    const response = await axios.get(`${backendUrl}/auth/google`, {
-      withCredentials: true, // needed if backend sets cookies
-    });
-
-    console.log("Google login response:", response.data);
-
-    // If backend sends redirect URL, follow it
-    if (response.data?.redirectUrl) {
-      window.location.href = response.data.redirectUrl;
-    } else {
-      console.warn("No redirect URL received from backend.");
-    }
-  } catch (error) {
-    console.error("Google login failed:", error.response?.data || error.message);
-  }
+const handleGoogleLogin = () => {
+  // Redirect the browser to your backend Google OAuth route
+  window.location.href = `${backendUrl}/auth/google`;
 };
 
 
