@@ -9,8 +9,8 @@ import PriorityBadge from "../UI/PriorityBadge";
 import AssignBugBadge from "../UI/AssignBugBadge";
 import axios from "axios";
 import BugDetail from "../Bug_Info_Page/BugDetail";
+import { useSearchFilter } from "./SearchFilterContext";
 const backendUrl = import.meta.env.VITE_BACKEND_URL;
-import { useLocalStorageListener, setLocalStorage } from "./util";
 
 /* ----------------- Small Toast (same style) ----------------- */
 const Toast = ({ message, type, onClose }) => {
@@ -62,6 +62,7 @@ const Toast = ({ message, type, onClose }) => {
 
 const BugSection = ({ activeTeam, status }) => {
   const navigate = useNavigate();
+  const { filterBugs, sortBugs } = useSearchFilter();
 
   const [allBugs, setAllBugs] = useState([]);
   const [selectedBug, setSelectedBug] = useState(null);
@@ -102,7 +103,7 @@ const BugSection = ({ activeTeam, status }) => {
       .then((response) => {
         setAllBugs(response.data);
        // console.log(response.data);
-        showToast("Bugs loaded", "success");
+      //  showToast("Bugs loaded", "success");
       })
       .catch((error) => {
         console.error("Error fetching bugs:", error);
@@ -222,8 +223,7 @@ const BugSection = ({ activeTeam, status }) => {
       setDeleting(true);
       const bugIdToSend = bugToDelete._id ?? bugToDelete.id;
 
-      await axios.delete(`${backendUrl}/bug/manage`, {
-        params: { bugId: bugIdToSend, teamId: activeTeam?._id },
+      await axios.delete(`${backendUrl}/bug/manage/${bugIdToSend}?teamId=${activeTeam?._id}`, {
         withCredentials: true,
       });
 
@@ -267,16 +267,27 @@ const BugSection = ({ activeTeam, status }) => {
 
   const wanted = normalize(status);
 
+  // First filter by status (section-specific)
   const filteredServer = serverList.filter((b) => normalize(b?.status) === wanted);
   const filteredLocal = tasks.filter((t) => normalize(t?.status) === wanted);
 
-  const mergedBugs = [...filteredServer, ...filteredLocal];
+  const statusFilteredBugs = [...filteredServer, ...filteredLocal];
+
+  // Then apply search and custom filters using context
+  const searchAndFilteredBugs = filterBugs(statusFilteredBugs);
+  
+  // Finally sort the bugs
+  const mergedBugs = sortBugs(searchAndFilteredBugs);
 
   // 🔹 Detail view placeholder
-  const BugDetailView = ({ bug, onBack }) => {
+  const BugDetailView = ({ bug }) => {
     useEffect(() => {
-      if (bug) {
-        localStorage.setItem("selectedBug", JSON.stringify(bug));
+      if (bug && bug._id) {
+        try {
+          localStorage.setItem("selectedBug", JSON.stringify(bug));
+        } catch (e) {
+          console.error("Could not save bug to localStorage", e);
+        }
       }
     }, [bug]);
 
@@ -374,17 +385,19 @@ const BugSection = ({ activeTeam, status }) => {
                   ? new Date(bug.dueDate).toISOString().split("T")[0]
                   : "";
 
-                const assigneeDisplay =
-                  typeof bug.assignedName === "string"
-                    ? bug.assignedName
-                    : bug.assignee?.name || "Unassigned";
+                // Pass assignedName directly as array for proper multi-user display
+                const assigneeDisplay = Array.isArray(bug.assignedName) 
+                  ? bug.assignedName 
+                  : bug.assignedName 
+                    ? [bug.assignedName]
+                    : [];
 
                 return (
                   <BugRow
                     key={id}
                     id={id}
                     name={bug.title || bug.name || bug.summary || "Untitled"}
-                    assignee={bug.assignedName}
+                    assignedName={assigneeDisplay}
                     dueDate={formattedDueDate}
                     priority={bug.priority}
                     status={status}
@@ -392,11 +405,15 @@ const BugSection = ({ activeTeam, status }) => {
                     onDelete={deleteTask}
                     openBugDetail={() => {
                       try {
-                        localStorage.setItem("selectedBug", JSON.stringify(bug));
+                        if (bug && bug._id) {
+                          localStorage.setItem("selectedBug", JSON.stringify(bug));
+                          navigate("/bug-details");
+                        } else {
+                          console.error("Invalid bug data, cannot open details");
+                        }
                       } catch (e) {
                         console.error("Could not save to localStorage", e);
                       }
-                      navigate("/bug-details");
                     }}
                   />
                 );

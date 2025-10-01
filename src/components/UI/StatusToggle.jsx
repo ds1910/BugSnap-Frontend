@@ -2,7 +2,7 @@
 // StatusToggle.jsx (fixed)
 // ==============================
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 
 const statusConfig = {
   OPEN: {
@@ -94,12 +94,27 @@ const normalizeStatus = (s) =>
 
 const StatusToggle = ({ status = "OPEN", onChange }) => {
   const [current, setCurrent] = useState(normalizeStatus(status));
+  const [isClicking, setIsClicking] = useState(false);
+
+  // Update current state when status prop changes (external updates)
+  useEffect(() => {
+    if (!isClicking) {
+      setCurrent(normalizeStatus(status));
+    }
+  }, [status, isClicking]);
 
   const next = () => {
+    if (isClicking) return; // Prevent rapid clicks
+    
+    setIsClicking(true);
     const i = order.indexOf(current);
     const nextStatus = order[(i + 1) % order.length];
     setCurrent(nextStatus);
-    onChange?.(nextStatus);
+    // Send lowercase value to match database enum
+    onChange?.(nextStatus.toLowerCase());
+    
+    // Allow next click after a short delay
+    setTimeout(() => setIsClicking(false), 300);
   };
 
   // fallback to OPEN if not found
@@ -117,10 +132,12 @@ const StatusToggle = ({ status = "OPEN", onChange }) => {
         fontWeight: "bold",
         fontSize: 12,
         color: "white",
+        opacity: isClicking ? 0.7 : 1,
+        cursor: isClicking ? "not-allowed" : "pointer",
       }}
       onClick={next}
-      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = hover)}
-      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = bg)}
+      onMouseEnter={(e) => !isClicking && (e.currentTarget.style.backgroundColor = hover)}
+      onMouseLeave={(e) => !isClicking && (e.currentTarget.style.backgroundColor = bg)}
     >
       <div className="flex items-center justify-center bg-white rounded-full w-4 h-4">
         {icon(bg)}

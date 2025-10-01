@@ -51,7 +51,7 @@ const UserProfileSection = ({ userInfo }) => {
           )}
 
           {/* User Name */}
-          <span className="text-gray-300 font-medium truncate w-[160px]" onClick={<PeopleSection/>}>
+          <span className="text-gray-300 font-medium truncate w-[160px]">
             {userInfo?.name || "User Name"} {/* Display user's name or fallback */}
           </span>
         </div>

@@ -1,7 +1,8 @@
 // PeopleSection.jsx
 import React, { useState, useEffect } from "react";
 import PeopleCard from "./PeopleCard";
-import { Search, X, Plus, Trash2 } from "lucide-react";
+import NoPeopleState from "./NoPeopleState";
+import { Search, X, Plus, Trash2, RefreshCw } from "lucide-react";
 import ProfilePopup from "./ProfilePopup";
 import InvitePopup from "./InvitePopup";
 import Message from "./Message";
@@ -79,55 +80,80 @@ const PeopleSection = () => {
 
   const [deleting, setDeleting] = useState(false);
 
+  const fetchPeople = async () => {
+    setLoading(true);
+    try {
+      console.log("=== Frontend fetchPeople Debug ===");
+      console.log("Fetching from:", `${backendUrl}/people/getAllPeople`);
+      
+      // Add user info to debug
+      const userDataStr = localStorage.getItem('userData');
+      if (userDataStr) {
+        console.log("Current logged in user:", JSON.parse(userDataStr));
+      }
+      
+      const res = await axios.get(`${backendUrl}/people/getAllPeople`, {
+        withCredentials: true,
+      });
+
+      console.log("Response received:", res.data);
+      console.log("Response status:", res.status);
+      console.log("Response headers:", res.headers);
+      
+      const raw = res?.data?.people ?? res?.data ?? [];
+      console.log("Raw people data:", raw);
+      console.log("Number of people found:", raw.length);
+
+      const normalized = (Array.isArray(raw) ? raw : []).map((p) => {
+        const id = p._id ?? p.id ?? Math.random().toString(36).slice(2, 9);
+
+        let teams = p.teams ?? [];
+        if (Array.isArray(teams) && teams.length > 0 && typeof teams[0] === "object") {
+          teams = teams.map((t) => t.name ?? t);
+        }
+
+        const bugsRaw = Array.isArray(p.bugs) ? p.bugs : [];
+        const bugs = bugsRaw.map((b) => ({
+          id: b._id ?? b.id ?? Math.random().toString(36).slice(2, 9),
+          title: b.title ?? "",
+          status: b.status ?? "",
+          ...b,
+        }));
+
+        return {
+          ...p,
+          id,
+          teams,
+          bugs,
+        };
+      });
+
+      console.log("Normalized people data:", normalized);
+      setPeople(normalized);
+    } catch (err) {
+      console.error("Failed to fetch people:", err);
+      showToast("Failed to load people from server", "error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
+    console.log("=== PeopleSection useEffect Triggered ===");
+    console.log("Component mounted/re-mounted, fetching people...");
     let mounted = true;
 
-    const fetchPeople = async () => {
-      setLoading(true);
-      try {
-        const res = await axios.get(`${backendUrl}/people/getAllPeople`, {
-          withCredentials: true,
-        });
-
-        const raw = res?.data?.people ?? res?.data ?? [];
-
-        const normalized = (Array.isArray(raw) ? raw : []).map((p) => {
-          const id = p._id ?? p.id ?? Math.random().toString(36).slice(2, 9);
-
-          let teams = p.teams ?? [];
-          if (Array.isArray(teams) && teams.length > 0 && typeof teams[0] === "object") {
-            teams = teams.map((t) => t.name ?? t);
-          }
-
-          const bugsRaw = Array.isArray(p.bugs) ? p.bugs : [];
-          const bugs = bugsRaw.map((b) => ({
-            id: b._id ?? b.id ?? Math.random().toString(36).slice(2, 9),
-            title: b.title ?? "",
-            status: b.status ?? "",
-            ...b,
-          }));
-
-          return {
-            ...p,
-            id,
-            teams,
-            bugs,
-          };
-        });
-
-        if (mounted) setPeople(normalized);
-      } catch (err) {
-        console.error("Failed to fetch people:", err);
-        showToast("Failed to load people from server", "error");
-      } finally {
-        if (mounted) setLoading(false);
+    const loadPeople = async () => {
+      if (mounted) {
+        await fetchPeople();
       }
     };
 
-    fetchPeople();
+    loadPeople();
 
     return () => {
       mounted = false;
+      console.log("PeopleSection component unmounted");
     };
   }, []);
 
@@ -277,6 +303,20 @@ const handleSendMessage = async ({ email, subject, messageHtml, attachments }) =
           </div>
 
           <button
+            onClick={fetchPeople}
+            disabled={loading}
+            className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition duration-200 focus:outline-none focus:ring-2 ${
+              loading 
+                ? 'bg-zinc-700 border-zinc-600 text-zinc-400 cursor-not-allowed' 
+                : 'bg-zinc-800 border-zinc-600 text-white hover:bg-zinc-700 hover:border-zinc-500 focus:ring-blue-400'
+            }`}
+            aria-label="Refresh people list"
+          >
+            <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
+            {loading ? 'Refreshing...' : 'Refresh'}
+          </button>
+
+          <button
             onClick={() => setShowInviteModal(true)}
             className="flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 text-white transform transition duration-200 hover:scale-105 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-400"
             aria-label="Invite people"
@@ -286,13 +326,17 @@ const handleSendMessage = async ({ email, subject, messageHtml, attachments }) =
         </div>
       </div>
 
-      <div className=" max-h-[500px] overflow-y-auto pr-2">
+      <div className="max-h-[500px] overflow-y-auto pr-2">
         {loading ? (
-          <div className="text-center py-8 text-gray-300">Loading people...</div>
+          <div className="flex justify-center items-center h-[300px]">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+          </div>
+        ) : people.length === 0 ? (
+          <NoPeopleState onInvitePeople={() => setShowInviteModal(true)} />
         ) : (
           <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 auto-rows-fr items-stretch">
             {filteredPeople.length === 0 ? (
-              <div className="text-gray-400 col-span-full">No people found.</div>
+              <div className="text-gray-400 col-span-full text-center py-8">No people found matching your search.</div>
             ) : (
               filteredPeople.map((person) => (
                 <div key={person.id} className="h-full flex">
@@ -409,6 +453,10 @@ const handleSendMessage = async ({ email, subject, messageHtml, attachments }) =
           onInvite={(emails) => {
             setShowInviteModal(false);
             showToast(`Invite sent to ${emails}`, "success");
+            // Refresh people list after successful invitation
+            setTimeout(() => {
+              fetchPeople();
+            }, 1000);
           }}
           onInviteError={(errMsg) => {
             showToast(errMsg || "Invite failed", "error");

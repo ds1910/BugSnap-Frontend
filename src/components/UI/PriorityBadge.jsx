@@ -23,7 +23,8 @@ const PriorityDropdown = ({ value, onChange }) => {
 
   const handleSelect = (priority, close) => {
     setSelected(priority);
-    onChange?.(priority.label);
+    // Send lowercase value to match database enum
+    onChange?.(priority.label.toLowerCase());
     close?.();
   };
 

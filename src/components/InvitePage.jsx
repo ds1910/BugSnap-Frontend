@@ -45,6 +45,8 @@ const Toast = ({ message, type, onClose }) => {
 const InvitePage = () => {
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState(null);
+  const [authChecking, setAuthChecking] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const showToast = (message, type = "success") => setToast({ message, type });
 
   const [searchParams] = useSearchParams();
@@ -56,33 +58,107 @@ const InvitePage = () => {
     : "Someone";
   const token = searchParams.get("token");
 
+  // Check authentication status on component mount
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        // Try to make a simple authenticated request to check if user is logged in
+        const response = await axios.get(`${backendUrl}/people/getAllPeople`, {
+          withCredentials: true
+        });
+        
+        if (response.status === 200) {
+          setIsAuthenticated(true);
+        }
+      } catch (err) {
+        setIsAuthenticated(false);
+      } finally {
+        setAuthChecking(false);
+      }
+    };
+
+    if (token) {
+      checkAuth();
+    } else {
+      setAuthChecking(false);
+    }
+  }, [token]);
+
   // Redirect if no token
   useEffect(() => {
-    if (!token) {
+    if (!token && !authChecking) {
       showToast("Invalid invite link. Redirecting...", "error");
       setTimeout(() => navigate("/dashboard"), 1500);
     }
-  }, [token, navigate]);
+  }, [token, navigate, authChecking]);
 
   const handleAcceptInvite = async () => {
     if (!token) return showToast("Invalid invite link", "error");
 
     try {
       setLoading(true);
-      await axios.patch(
+      const response = await axios.post(
         `${backendUrl}/people/add`,
         { token },
         { withCredentials: true }
       );
 
       showToast("Invite accepted! Redirecting...", "success");
-      setTimeout(() => navigate("/dashboard"), 1200);
+      
+      // Check if backend indicates people list should be refreshed
+      if (response.data?.refreshPeople) {
+        setTimeout(() => navigate("/dashboard?inviteAccepted=true"), 1200);
+      } else {
+        setTimeout(() => navigate("/dashboard"), 1200);
+      }
     } catch (err) {
-      showToast(err.response?.data?.error || "Failed to accept invite", "error");
+      console.error("Accept invite error:", err);
+      
+      if (err.response?.status === 401) {
+        showToast("Please log in first to accept the invitation", "error");
+        // Store token in sessionStorage for after login
+        sessionStorage.setItem('pendingInviteToken', token);
+        sessionStorage.setItem('pendingInviter', inviter);
+        setTimeout(() => navigate("/login"), 1500);
+      } else if (err.response?.status === 403) {
+        showToast("This invitation is not for your account. Please log in with the correct email.", "error");
+      } else if (err.response?.status === 400) {
+        showToast(err.response?.data?.error || "Invalid invitation token", "error");
+      } else if (err.response?.status === 404) {
+        showToast("Invitation not found", "error");
+      } else {
+        showToast(err.response?.data?.error || "Failed to accept invite", "error");
+      }
     } finally {
       setLoading(false);
     }
   };
+
+  const handleSignUp = () => {
+    // Store token for after signup and login
+    sessionStorage.setItem('pendingInviteToken', token);
+    sessionStorage.setItem('pendingInviter', inviter);
+    navigate("/signup");
+  };
+
+  const handleLogin = () => {
+    // Store token for after login
+    sessionStorage.setItem('pendingInviteToken', token);
+    sessionStorage.setItem('pendingInviter', inviter);
+    navigate("/login");
+  };
+
+  // Show loading while checking authentication
+  if (authChecking) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Checking authentication...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="font-sans text-gray-900 min-h-screen py-4 px-2 sm:px-4 md:p-8 invite-page-container relative overflow-hidden">
@@ -190,25 +266,52 @@ const InvitePage = () => {
             <span className="font-semibold text-gray-900">{inviter}</span> has invited you to accelerate bug tracking and collaboration for your team.
           </p>
 
-          {/* Button */}
-          <div className="mt-8 flex justify-center">
-            <button
-              onClick={handleAcceptInvite}
-              disabled={loading}
-              className={`gradient-button text-white font-semibold py-4 px-12 rounded-full text-lg transition-all duration-300 ${
-                loading ? "opacity-80 cursor-not-allowed" : ""
-              }`}
-            >
-              {loading ? (
-                <>
-                  <div className="spinner" />
-                  <span className="pulse-text">Accepting...</span>
-                </>
-              ) : (
-                "Accept Your Invitation"
-              )}
-            </button>
-          </div>
+          {/* Conditional Buttons Based on Authentication */}
+          {isAuthenticated ? (
+            // User is authenticated - show accept button
+            <div className="mt-8 flex justify-center">
+              <button
+                onClick={handleAcceptInvite}
+                disabled={loading}
+                className={`gradient-button text-white font-semibold py-4 px-12 rounded-full text-lg transition-all duration-300 ${
+                  loading ? "opacity-80 cursor-not-allowed" : ""
+                }`}
+              >
+                {loading ? (
+                  <>
+                    <div className="spinner" />
+                    <span className="pulse-text">Accepting...</span>
+                  </>
+                ) : (
+                  "Accept Your Invitation"
+                )}
+              </button>
+            </div>
+          ) : (
+            // User is not authenticated - show signup/login options
+            <div className="mt-8 space-y-4">
+              <p className="text-lg text-gray-700 font-medium">
+                To accept this invitation, please log in or create an account:
+              </p>
+              <div className="flex justify-center space-x-4">
+                <button
+                  onClick={handleSignUp}
+                  className="gradient-button text-white font-semibold py-3 px-8 rounded-full text-lg transition-all duration-300"
+                >
+                  Create Account
+                </button>
+                <button
+                  onClick={handleLogin}
+                  className="bg-gray-600 hover:bg-gray-700 text-white font-semibold py-3 px-8 rounded-full text-lg transition-all duration-300"
+                >
+                  Log In
+                </button>
+              </div>
+              <p className="text-sm text-gray-500 mt-4">
+                Your invitation will be automatically processed after you sign up or log in.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* About Section */}

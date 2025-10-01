@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Menu } from "@headlessui/react"; // Headless UI for accessible dropdowns
 import {
   ChevronDown,
@@ -10,9 +10,16 @@ import {
   Calendar,
   UserCircle,
   Clock,
+  Loader2,
+  AlertCircle,
+  Filter,
+  X,
 } from "lucide-react"; // Icons for dropdowns & buttons
-
 import CalendarDropdown from "../UI/CalendarDropdown"; // Custom date picker component
+import { useSearchFilter } from "./SearchFilterContext"; // Import the context
+import axios from "axios"; // For API calls
+
+const backendUrl = import.meta.env.VITE_BACKEND_URL;
 
 /**
  * FilterPanel Component
@@ -27,10 +34,71 @@ import CalendarDropdown from "../UI/CalendarDropdown"; // Custom date picker com
  */
 const FilterPanel = () => {
   // -------------------------
+  // Context state
+  // -------------------------
+  const { 
+    filters, 
+    updateFilters, 
+    addFilter, 
+    removeFilter, 
+    clearFilters 
+  } = useSearchFilter();
+
+  // -------------------------
   // Local state
   // -------------------------
   const [open, setOpen] = useState(false); // Controls visibility of filter panel
-  const [filters, setFilters] = useState([{ id: 1, field: "", value: "", condition: "AND" }]); // Array of filter objects
+  const [users, setUsers] = useState([]); // Real users from API
+  const [loadingUsers, setLoadingUsers] = useState(false); // Loading state
+  const [usersFetchError, setUsersFetchError] = useState(false); // Error state
+
+  // -------------------------
+  // Fetch users from API when component mounts
+  // -------------------------
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        setLoadingUsers(true);
+        setUsersFetchError(false);
+        
+        const activeTeamString = localStorage.getItem("activeTeam");
+        if (!activeTeamString) {
+          console.warn("No active team found in localStorage");
+          setUsersFetchError(true);
+          return;
+        }
+
+        const activeTeam = JSON.parse(activeTeamString);
+
+        const response = await axios.post(
+          `${backendUrl}/team/members`,
+          { teamId: activeTeam._id },
+          { 
+            withCredentials: true // Use cookies for authentication
+          }
+        );
+
+        // Extract user names from the response
+        const userNames = (response.data.members || []).map(member => member.name);
+        
+        if (userNames.length === 0) {
+          console.warn("No team members found");
+          setUsers(["No users found"]);
+        } else {
+          setUsers(userNames);
+        }
+      } catch (error) {
+        console.error("Failed to fetch users for filters:", error);
+        setUsersFetchError(true);
+        // Set fallback message on error
+        setUsers(["Unable to load users"]);
+      } finally {
+        setLoadingUsers(false);
+      }
+    };
+
+    fetchUsers();
+  }, []);
 
   // -------------------------
   // Available filter fields with icons
@@ -48,12 +116,19 @@ const FilterPanel = () => {
   ];
 
   // Predefined options for each field
+  const getUserOptions = () => {
+    if (loadingUsers) return ["Loading..."];
+    if (usersFetchError) return ["Unable to load users"];
+    if (users.length === 0) return ["No users found"];
+    return users;
+  };
+
   const fieldValueOptions = {
-    Status: ["open", "in-progress", "resolved", "closed"],
-    Priority: ["low", "medium", "high", "critical"],
+    Status: ["Open", "In Progress", "Resolved", "Closed"],
+    Priority: ["Low", "Medium", "High", "Critical"],
     Tags: ["frontend", "backend", "bug", "feature", "ui", "api"],
-    Assignee: ["User A", "User B", "User C"],
-    "Created by": ["User A", "User B", "User C"],
+    Assignee: getUserOptions(),
+    "Created by": getUserOptions(),
     "Start date": [],
     "Due date": [],
     "Date created": [],
@@ -63,16 +138,18 @@ const FilterPanel = () => {
   // -------------------------
   // Helper functions
   // -------------------------
-  const addFilter = () => {
-    setFilters([...filters, { id: Date.now(), field: "", value: "", condition: "AND" }]); // Add new empty filter
+  const updateFilter = (id, field, value) => {
+    const newFilters = filters.map(filter => 
+      filter.id === id ? { ...filter, [field]: value } : filter
+    );
+    updateFilters(newFilters);
   };
 
-  const removeFilter = (id) => {
-    setFilters(filters.filter((f) => f.id !== id)); // Remove filter by id
-  };
-
-  const clearFilters = () => {
-    setFilters([{ id: 1, field: "", value: "", condition: "AND" }]); // Reset to default
+  const updateFilterCondition = (id, condition) => {
+    const newFilters = filters.map(filter => 
+      filter.id === id ? { ...filter, condition } : filter
+    );
+    updateFilters(newFilters);
   };
 
   return (
@@ -99,17 +176,19 @@ const FilterPanel = () => {
       {open && (
         <div className="absolute right-0 mt-7 w-[650px] bg-[#2C2C2C] border border-[#505050] rounded-lg shadow-lg p-4 z-20">
           
-          {/* Header with Clear and Saved Filters buttons */}
-          <div className="flex justify-between items-center mb-3">
-            <span className="text-sm font-medium text-white">Filters</span>
-            <div className="flex gap-3">
-              <button onClick={clearFilters} className="text-xs text-gray-400 hover:text-red-400">
-                Clear all
-              </button>
-              <button className="text-xs text-gray-400 hover:text-white">
-                Saved filters ▾
-              </button>
+          {/* Header with Clear button */}
+          <div className="flex justify-between items-center mb-4">
+            <div className="flex items-center gap-2">
+              <Filter size={16} className="text-indigo-400" />
+              <span className="text-sm font-semibold text-white">Filters</span>
             </div>
+            <button 
+              onClick={clearFilters} 
+              className="text-xs text-gray-400 hover:text-red-400 transition-colors duration-200 flex items-center gap-1"
+            >
+              <X size={12} />
+              Clear all
+            </button>
           </div>
 
           {/* -------------------------
@@ -127,13 +206,7 @@ const FilterPanel = () => {
                   <CustomDropdown 
                     value={filter.condition}
                     options={["AND", "OR"]}
-                    onChange={(val) =>
-                      setFilters(
-                        filters.map((f) =>
-                          f.id === filter.id ? { ...f, condition: val } : f
-                        )
-                      )
-                    }
+                    onChange={(val) => updateFilterCondition(filter.id, val)}
                     width="w-24"
                   />
                 )}
@@ -142,13 +215,7 @@ const FilterPanel = () => {
                 <CustomDropdown
                   value={filter.field || "Select field"}
                   options={filterOptions.map((opt) => opt.name)}
-                  onChange={(val) =>
-                    setFilters(
-                      filters.map((f) =>
-                        f.id === filter.id ? { ...f, field: val, value: "" } : f
-                      )
-                    )
-                  }
+                  onChange={(val) => updateFilter(filter.id, 'field', val)}
                   withIcons={filterOptions}
                 />
 
@@ -157,24 +224,14 @@ const FilterPanel = () => {
                   <CustomDropdown
                     value={filter.value || "Select value"}
                     options={fieldValueOptions[filter.field]}
-                    onChange={(val) =>
-                      setFilters(
-                        filters.map((f) =>
-                          f.id === filter.id ? { ...f, value: val } : f
-                        )
-                      )
-                    }
+                    onChange={(val) => updateFilter(filter.id, 'value', val)}
+                    isLoading={loadingUsers && (filter.field === "Assignee" || filter.field === "Created by")}
+                    isError={usersFetchError && (filter.field === "Assignee" || filter.field === "Created by")}
                   />
                 ) : ["Start date", "Due date", "Date created", "Date closed"].includes(filter.field) ? (
                   <CalendarDropdown
                     selectedDate={filter.value}
-                    onDateChange={(date) =>
-                      setFilters(
-                        filters.map((f) =>
-                          f.id === filter.id ? { ...f, value: date } : f
-                        )
-                      )
-                    }
+                    onDateChange={(date) => updateFilter(filter.id, 'value', date)}
                   />
                 ) : null}
 
@@ -212,30 +269,54 @@ const FilterPanel = () => {
  * - onChange: callback when selection changes
  * - withIcons: optional, array of {name, icon} objects for icons
  * - width: Tailwind width class
+ * - isLoading: show loading state for user-related fields
+ * - isError: show error state for user-related fields
  */
-const CustomDropdown = ({ value, options, onChange, withIcons, width = "w-40" }) => (
+const CustomDropdown = ({ value, options, onChange, withIcons, width = "w-40", isLoading = false, isError = false }) => (
   <Menu as="div" className={`relative inline-block text-left ${width}`}>
     <Menu.Button className="flex items-center justify-between w-full px-3 py-2 bg-[#2C2C2C] 
       text-sm text-white hover:bg-[#454545] transition-all rounded-lg">
-      {value}
+      <div className="flex items-center gap-2">
+        {isLoading && <Loader2 size={14} className="animate-spin text-blue-400" />}
+        {isError && <AlertCircle size={14} className="text-red-400" />}
+        <span>{value}</span>
+      </div>
       <ChevronDown size={16} className="ml-2 text-gray-300" />
     </Menu.Button>
     <Menu.Items className="absolute mt-2 w-full origin-top-left bg-[#1E1E1E] border border-[#505050] shadow-lg focus:outline-none rounded-lg z-30">
       {options.map((opt) => {
         const isSelected = value === opt;
         const icon = withIcons?.find((i) => i.name === opt)?.icon;
+        const isSpecialItem = ["Loading...", "Unable to load users", "No users found"].includes(opt);
+        
         return (
-          <Menu.Item key={opt}>
+          <Menu.Item key={opt} disabled={isSpecialItem}>
             {({ active }) => (
               <button
-                onClick={() => onChange(opt)}
+                onClick={() => !isSpecialItem && onChange(opt)}
+                disabled={isSpecialItem}
                 className={`w-full flex items-center justify-between px-3 py-2 text-sm transition-colors rounded-lg
-                  ${isSelected ? "bg-[#2C2C2C] text-white" : active ? "bg-[#3A3A3A] text-white" : "text-gray-300"}`}>
+                  ${isSpecialItem 
+                    ? "bg-[#1E1E1E] text-gray-500 cursor-not-allowed" 
+                    : isSelected 
+                      ? "bg-[#2C2C2C] text-white" 
+                      : active 
+                        ? "bg-[#3A3A3A] text-white" 
+                        : "text-gray-300"
+                  }`}>
                 <div className="flex items-center gap-3">
-                  {icon && icon}
+                  {opt === "Loading..." ? (
+                    <Loader2 size={14} className="animate-spin text-blue-400" />
+                  ) : opt === "Unable to load users" ? (
+                    <AlertCircle size={14} className="text-red-400" />
+                  ) : opt === "No users found" ? (
+                    <User size={14} className="text-gray-500" />
+                  ) : (
+                    icon && icon
+                  )}
                   <span>{opt}</span>
                 </div>
-                {isSelected && <Check size={16} />}
+                {isSelected && !isSpecialItem && <Check size={16} />}
               </button>
             )}
           </Menu.Item>

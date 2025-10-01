@@ -7,7 +7,10 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "seo:generate-sitemap": "node scripts/generate-sitemap.js",
+    "seo:audit": "lighthouse --chrome-flags=\"--headless\" --only-categories=seo,performance,accessibility --output=html --output-path=./lighthouse-report.html",
+    "prebuild": "npm run seo:generate-sitemap"
   },
   "dependencies": {
     "@fontsource/poppins": "^5.2.6",
@@ -32,6 +35,7 @@
     "react-beautiful-dnd": "^13.1.1",
     "react-day-picker": "^9.8.1",
     "react-dom": "^18.3.1",
+    "react-helmet-async": "^2.0.5",
     "react-icons": "^5.5.0",
     "react-markdown": "^10.1.0",
     "react-quill": "^2.0.0",

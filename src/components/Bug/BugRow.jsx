@@ -1,6 +1,7 @@
 import React from "react";
 import StatusToggle from "../UI/StatusToggle";
 import FlagBadge from "../UI/FlagBadge";
+import AssignBugBadge from "../UI/AssignBugBadge";
 import { Calendar, MessageSquare, Trash2, User } from "lucide-react";
 
 /**
@@ -15,7 +16,7 @@ import { Calendar, MessageSquare, Trash2, User } from "lucide-react";
  * Props:
  * - id: unique identifier for the bug/task (used for delete)
  * - name: task title
- * - assignee: string or object representing assigned user
+ * - assignedName: array of assigned users
  * - dueDate: string (date or "TBD")
  * - priority: string (e.g., Low, Medium, High)
  * - status: string (used by StatusToggle)
@@ -26,7 +27,7 @@ import { Calendar, MessageSquare, Trash2, User } from "lucide-react";
 const BugRow = ({
   id,
   name,
-  assignee,
+  assignedName, // Changed from assignee to assignedName to match API
   dueDate,
   priority,
   status,
@@ -35,7 +36,7 @@ const BugRow = ({
   openBugDetail, // added: optional callback to open detail (parent replaces list)
 }) => {
   // create a bug object to pass to detail view when requested
-  const bug = { id, name, assignee, dueDate, priority, status, comments };
+  const bug = { id, name, assignedName, dueDate, priority, status, comments };
 
   const handleRowClick = () => {
     if (typeof openBugDetail === "function") {
@@ -73,14 +74,15 @@ const BugRow = ({
 
       {/* -------------------------
           Assignee Column
-          Shows user avatar icon + assignee name
-          Default to "Unassigned" if no assignee
+          Shows compact assignee avatars with initials
+          Uses new AssignBugBadge component in compact mode
       ------------------------- */}
       <div className="flex items-center">
-        <div className="flex items-center gap-2 bg-[#2D2D2D] text-white px-3 py-1 rounded-full text-base font-medium">
-          <User size={18} className="text-blue-400" /> {/* Assignee icon */}
-          <span>{assignee || "Unassigned"}</span>
-        </div>
+        <AssignBugBadge
+          value={assignedName || []}
+          onChange={() => {}} // Read-only in list view
+          compact={true}
+        />
       </div>
 
       {/* -------------------------

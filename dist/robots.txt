@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /admin/
+Disallow: /upload/
+
+# Sitemap location
+Sitemap: https://bugsnap.vercel.app/sitemap.xml
+
+# Crawl-delay for all bots
+Crawl-delay: 1

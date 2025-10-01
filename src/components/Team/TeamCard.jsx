@@ -374,7 +374,9 @@ const TeamCard = ({
         const resp = await axios.post(
           `${backendUrl}/team/members`,
           { teamId: team._id }, 
-          { withCredentials: true } 
+          { 
+            withCredentials: true // Use cookies for authentication
+          } 
         );
 
        

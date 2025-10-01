@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import commentApi from "./comment"; // make sure this path matches your project
+import commentApi from "./comment";
 
 // Helper: relative time (robust to null/invalid)
 const formatRelativeTime = (dateString) => {
@@ -20,7 +20,6 @@ const formatRelativeTime = (dateString) => {
 };
 
 // Simple markdown-like parser for bold and italic text.
-// NOTE: using dangerouslySetInnerHTML — ensure server-side sanitization
 const parseText = (text) => {
   if (!text) return "";
   let out = text;
@@ -29,40 +28,49 @@ const parseText = (text) => {
   return out;
 };
 
-// Read current user from localStorage (keep this, but expose id as well)
-const userInfoString = localStorage.getItem("userInfo");
-const parsedUserInfo = userInfoString ? JSON.parse(userInfoString) : {};
-const storedUser = {
-  id: parsedUserInfo._id || parsedUserInfo.id || parsedUserInfo.userId || null,
-  name: parsedUserInfo.name || "Guest User",
-  email: parsedUserInfo.email || "guest@example.com",
+// Read current user from localStorage
+const getUserInfo = () => {
+  try {
+    const userInfoString = localStorage.getItem("userInfo");
+    const parsedUserInfo = userInfoString ? JSON.parse(userInfoString) : {};
+    return {
+      id: parsedUserInfo._id || parsedUserInfo.id || parsedUserInfo.userId || null,
+      name: parsedUserInfo.name || "Guest User",
+      email: parsedUserInfo.email || "guest@example.com",
+    };
+  } catch (err) {
+    console.warn("Error parsing user info:", err);
+    return { id: null, name: "Guest User", email: "guest@example.com" };
+  }
 };
 
-// Visual helpers (UI-only)
+// Get team ID helper
+const getTeamId = () => {
+  try {
+    const teamStr = localStorage.getItem("activeTeam");
+    if (!teamStr) return null;
+    const team = JSON.parse(teamStr);
+    if (!team) return null;
+    if (typeof team === "string") return team;
+    return team._id || team.id || null;
+  } catch (err) {
+    console.warn("getTeamId parse error:", err);
+    return null;
+  }
+};
+
+// Visual helpers for avatars
 const avatarColors = [
-  ["#7C3AED", "#06B6D4"],
-  ["#F59E0B", "#F97316"],
-  ["#EF4444", "#EC4899"],
-  ["#10B981", "#06B6D4"],
-  ["#2563EB", "#7C3AED"],
-  ["#F43F5E", "#FB923C"],
-  ["#06B6D4", "#7DD3FC"],
-  ["#8B5CF6", "#06B6D4"],
-  ["#F97316", "#F43F5E"],
-  ["#F472B6", "#E879F9"],
-  ["#34D399", "#10B981"],
-  ["#60A5FA", "#3B82F6"],
-  ["#A78BFA", "#F472B6"],
-  ["#FDE68A", "#FCA5A5"],
-  ["#4ADE80", "#06B6D4"],
-  ["#FB7185", "#F97316"],
-  ["#06B6D4", "#818CF8"],
-  ["#F59E0B", "#F472B6"],
-  ["#84CC16", "#06B6D4"],
-  ["#06B6D4", "#06B6D4"],
+  ["#7C3AED", "#06B6D4"], ["#F59E0B", "#F97316"], ["#EF4444", "#EC4899"],
+  ["#10B981", "#06B6D4"], ["#2563EB", "#7C3AED"], ["#F43F5E", "#FB923C"],
+  ["#06B6D4", "#7DD3FC"], ["#8B5CF6", "#06B6D4"], ["#F97316", "#F43F5E"],
+  ["#F472B6", "#E879F9"], ["#34D399", "#10B981"], ["#60A5FA", "#3B82F6"],
+  ["#A78BFA", "#F472B6"], ["#FDE68A", "#FCA5A5"], ["#4ADE80", "#06B6D4"],
+  ["#FB7185", "#F97316"], ["#06B6D4", "#818CF8"], ["#F59E0B", "#F472B6"],
+  ["#84CC16", "#06B6D4"], ["#06B6D4", "#06B6D4"],
 ];
 
-// seeded pick with stable hashing
+// Seeded pick with stable hashing
 const pickGradient = (seed = "") => {
   let n = 5381;
   for (let i = 0; i < seed.length; i++) {
@@ -73,859 +81,522 @@ const pickGradient = (seed = "") => {
   return `linear-gradient(135deg, ${c1}, ${c2})`;
 };
 
-// helper: truncate snippet
+// Helper: truncate snippet
 const snippet = (text, max = 80) => {
   if (!text) return "";
   return text.length > max ? text.slice(0, max).trim() + "…" : text;
 };
 
-// Toast component (stacked + queued behavior)
-const MAX_VISIBLE_TOASTS = 3;
-const TOAST_DURATION = 4500; // ms (undo window for deletes)
+// Inline notification helper
+const showNotification = (message, type = "info") => {
+  console.log(`[${type.toUpperCase()}] ${message}`);
+  // You can enhance this with actual toast notifications if needed
+};
 
-const Toasts = ({ list, removeToast, onUndo }) => {
+// Reply Component for better organization
+const ReplyItem = ({ 
+  reply, 
+  isCurrentUserReply, 
+  onDelete, 
+  onEdit, 
+  loading,
+  isEditing,
+  editText,
+  setEditText,
+  onSaveEdit,
+  onCancelEdit 
+}) => {
+  const replyAuthor = reply.author || {
+    id: reply.createdBy?._id || reply.createdBy?.id || reply.createdBy,
+    name: reply.createdBy?.name || "Unknown User",
+    email: reply.createdBy?.email || ""
+  };
+  
+  const replyInitials = replyAuthor.name ? replyAuthor.name.split(" ").map(n => n[0]).join("").toUpperCase() : "?";
+  const replyGradient = pickGradient(replyAuthor.name || "unknown");
+
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      onSaveEdit();
+    } else if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      onSaveEdit();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      onCancelEdit();
+    }
+  };
+
   return (
     <div
-      style={{
-        position: "fixed",
-        top: 20,
-        right: 20,
-        zIndex: 9999,
-        display: "flex",
-        flexDirection: "column",
-        gap: 10,
+      className="flex items-start gap-3 p-4 rounded-xl transition-all duration-200 hover:bg-opacity-60"
+      style={{ 
+        background: "rgba(255,255,255,0.04)",
+        border: "1px solid rgba(255,255,255,0.08)"
       }}
     >
-      {list.map((t) => (
-        <div
-          key={t.id}
-          style={{
-            minWidth: 220,
-            maxWidth: 420,
-            background: "rgba(20,20,25,0.96)",
-            border: "1px solid rgba(255,255,255,0.06)",
-            color: "white",
-            padding: "10px 12px",
-            borderRadius: 10,
-            boxShadow: "0 8px 28px rgba(0,0,0,0.6)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 12,
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              gap: 10,
-              alignItems: "center",
-              minWidth: 0,
-            }}
-          >
-            <div
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: 8,
-                background: "rgba(255,255,255,0.03)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontWeight: 700,
-                color: "#fff",
-                fontSize: 14,
-              }}
-            >
-              {t.title?.[0] || "I"}
-            </div>
+      {/* Reply Avatar */}
+      <div
+        className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold text-white shadow-lg flex-shrink-0"
+        style={{ background: replyGradient }}
+      >
+        {replyInitials}
+      </div>
 
-            <div style={{ minWidth: 0 }}>
-              <div
-                style={{
-                  fontSize: 13,
-                  fontWeight: 700,
-                  color: "#fff",
-                  marginBottom: 4,
-                }}
-              >
-                {t.title}
-              </div>
-              <div
-                style={{
-                  fontSize: 12,
-                  color: "rgba(255,255,255,0.78)",
-                  marginBottom: 6,
-                }}
-              >
-                {t.message}
-              </div>
-              {t.snippet && (
-                <div
-                  style={{
-                    fontSize: 12,
-                    color: "rgba(255,255,255,0.65)",
-                    fontStyle: "italic",
-                  }}
-                >
-                  {t.snippet}
-                </div>
-              )}
+      {/* Reply Content */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center justify-between mb-2">
+          <div>
+            <div className="font-semibold text-white text-sm">
+              {replyAuthor.name}
             </div>
-          </div>
-
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            {t.canUndo && (
-              <button
-                onClick={() => onUndo(t.id)}
-                style={{
-                  background: "transparent",
-                  border: "1px solid rgba(255,255,255,0.08)",
-                  color: "white",
-                  padding: "6px 10px",
-                  borderRadius: 8,
-                  cursor: "pointer",
-                }}
-              >
-                Undo
-              </button>
+            {replyAuthor.email && (
+              <div className="text-xs text-gray-400 mt-0.5">
+                {replyAuthor.email}
+              </div>
             )}
-            <button
-              onClick={() => removeToast(t.id)}
-              style={{
-                background: "transparent",
-                border: "none",
-                color: "rgba(255,255,255,0.6)",
-                cursor: "pointer",
-                fontSize: 16,
-              }}
-              aria-label="close"
-            >
-              ✕
-            </button>
           </div>
+          {isCurrentUserReply && (
+            <div className="flex items-center gap-2">
+              {!isEditing && (
+                <button
+                  onClick={onEdit}
+                  disabled={loading}
+                  className="text-xs text-blue-400 hover:text-blue-300 transition px-2 py-1 rounded-md hover:bg-blue-500/10 flex items-center gap-1"
+                  title="Edit reply"
+                >
+                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                  </svg>
+                  Edit
+                </button>
+              )}
+              <button
+                onClick={onDelete}
+                disabled={loading}
+                className="text-xs text-red-400 hover:text-red-300 transition px-2 py-1 rounded-md hover:bg-red-500/10 flex items-center gap-1"
+                title="Delete reply"
+              >
+                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+                Delete
+              </button>
+            </div>
+          )}
         </div>
-      ))}
+
+        {isEditing ? (
+          <div className="space-y-3">
+            <textarea
+              value={editText}
+              onChange={(e) => setEditText(e.target.value)}
+              onKeyDown={handleKeyDown}
+              className="w-full p-3 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+              style={{
+                background: "rgba(255,255,255,0.08)",
+                border: "1px solid rgba(124, 58, 237, 0.3)",
+                color: "white",
+                minHeight: "70px"
+              }}
+              placeholder="Edit your reply..."
+              disabled={loading}
+              autoFocus
+            />
+            <div className="flex items-center gap-2">
+              <button
+                onClick={onSaveEdit}
+                disabled={loading || !editText.trim()}
+                className="px-3 py-1.5 bg-purple-500 hover:bg-purple-600 disabled:bg-gray-600 text-white text-xs rounded-md transition flex items-center gap-1"
+              >
+                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                </svg>
+                {loading ? "Saving..." : "Save"}
+              </button>
+              <button
+                onClick={onCancelEdit}
+                disabled={loading}
+                className="px-3 py-1.5 bg-gray-600 hover:bg-gray-700 text-white text-xs rounded-md transition flex items-center gap-1"
+              >
+                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+                Cancel
+              </button>
+              <div className="text-xs text-gray-400 ml-2">
+                Enter or Ctrl+Enter to save • Esc to cancel
+              </div>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div
+              className="text-sm text-gray-200 mb-2 leading-relaxed"
+              dangerouslySetInnerHTML={{ __html: parseText(reply.text) }}
+            />
+            <div className="text-xs text-gray-500">
+              {formatRelativeTime(reply.createdAt || reply.date)}
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 };
 
-// Utility: check if a string looks like a Mongo ObjectId (best-effort)
-const looksLikeObjectId = (s) =>
-  typeof s === "string" && /^[a-f0-9]{24}$/.test(s);
-
-// Resolve author-like fields to a friendly name using storedUser as a fallback
-const resolveAuthorFieldToName = (field) => {
-  if (!field) return null;
-  if (typeof field === "object")
-    return field.name || field.email || field._id || null;
-  if (typeof field === "string") {
-    // if backend returned an id for the current user, prefer name from localStorage
-    if (storedUser.id && field === storedUser.id) return storedUser.name;
-    if (storedUser.email && field === storedUser.email) return storedUser.name;
-    // if it's a normal user-display-name string, return it as-is
-    return field;
-  }
-  return null;
-};
-
+// Main CommentItem component
 const CommentItem = ({
   comment,
-  removeComment, // function(commentId) -> parent should remove comment from list
-  removeReply, // function(parentId, replyId) -> parent should remove reply from parent comment
+  removeComment,
+  removeReply,
   setReplyingTo,
   replyingTo,
   replyInput,
   setReplyInput,
-  addReply, // function(parentId, optionalReplyObjectOrText) -> parent to add reply (used for undo fallback)
+  addReply,
   updateComment,
-  currentUser, // parent may still pass this
+  currentUser,
 }) => {
-  const isReply = !!comment?.parentId;
-
-  // derive a robust author name (support different shapes). Use storedUser as fallback when an id is present.
-  const authorName =
-    resolveAuthorFieldToName(comment?.author) ||
-    resolveAuthorFieldToName(comment?.createdBy) ||
-    resolveAuthorFieldToName(comment?.user) ||
-    "Unknown";
-
-  const avatarText = (authorName || "User")[0].toUpperCase();
-
-  // Initially hide replies
-  const [isRepliesCollapsed, setIsRepliesCollapsed] = useState(true);
+  const [replies, setReplies] = useState([]);
+  const [showReplies, setShowReplies] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-  const [editText, setEditText] = useState(comment?.text || "");
-  const replyInputRef = useRef(null);
+  const [editText, setEditText] = useState(comment.text || "");
+  const [loading, setLoading] = useState(false);
+  const [repliesLoaded, setRepliesLoaded] = useState(false);
 
-  // fetched replies state + loading; null = not loaded yet
-  const [fetchedReplies, setFetchedReplies] = useState(null);
-  const [loadingReplies, setLoadingReplies] = useState(false);
+  // Reply editing states
+  const [editingReplyId, setEditingReplyId] = useState(null);
+  const [editingReplyText, setEditingReplyText] = useState("");
 
-  // Toasts + pending delete timers
-  const [toasts, setToasts] = useState([]);
-  const pendingDeletesRef = useRef({}); // key -> { timerId, data }
+  const commentId = comment._id || comment.id;
+  const storedUser = getUserInfo();
+  const isCurrentUserComment = 
+    currentUser && 
+    (currentUser.id === comment.author?.id || currentUser._id === comment.author?.id ||
+     storedUser.id === comment.author?.id || storedUser.id === comment.createdBy?._id);
 
-  // focus the inline reply input when replyingTo changes to this comment
-  useEffect(() => {
-    if (replyingTo === (comment?.id || comment?._id) && replyInputRef.current) {
-      replyInputRef.current.focus();
-    }
-  }, [replyingTo, comment]);
-
-  useEffect(() => {
-    setEditText(comment?.text || "");
-  }, [comment?.text]);
-
-  const handleEditToggle = () => {
-    const currentName = currentUser?.name || storedUser.name;
-    if (authorName !== currentName) {
-      return;
-    }
-    if (isEditing) {
-      // save
-      updateComment &&
-        updateComment(comment.id || comment._id || comment.id, editText);
-
-      setIsEditing(false);
-
-      // If this is a reply, call backend update for reply (fire-and-forget)
-      if (isReply) {
-        (async () => {
-          try {
-            if (typeof commentApi.updateReply === "function") {
-              await commentApi.updateReply({
-                parentId: comment.parentId,
-                replyId: comment.id || comment._id,
-                text: editText,
-              });
-            }
-          } catch (err) {
-            console.error("Error updating reply on backend:", err);
-          }
-        })();
-      } else {
-        // top-level comment update (if API has updateComment)
-        (async () => {
-          try {
-            if (typeof commentApi.updateComment === "function") {
-              await commentApi.updateComment({
-                commentId: comment.id || comment._id,
-                text: editText,
-              });
-            }
-          } catch (err) {
-            console.error("Error updating comment on backend:", err);
-          }
-        })();
-      }
-    } else {
-      setIsEditing(true);
-      setEditText(comment?.text || "");
-    }
-  };
-
-  // helper: normalize server reply payloads into an array of reply objects
-  const normalizeReplyPayload = (raw) => {
-    let data = raw;
-    if (!data) return [];
-    if (typeof data === "object" && "data" in data) data = data.data;
-
-    if (Array.isArray(data)) return data;
-    if (data?.replies && Array.isArray(data.replies)) return data.replies;
-    if (data?.reply && Array.isArray(data.reply)) return data.reply;
-
-    if (typeof data === "object" && (data.text || data._id || data.id))
-      return [data];
-
-    return [];
-  };
-
-  // fetchReplies function (called on expand)
-  const fetchReplies = async () => {
-    if (isReply) return;
-    if (fetchedReplies !== null) return;
-
-    // Resolve bugId to pass to the API
-    let bugIdToSend =
-      comment?.bugId ||
-      (comment?.bug && (typeof comment.bug === "string" ? comment.bug : comment.bug._id)) ||
-      null;
-
-    if (!bugIdToSend) {
-      try {
-        const sel = JSON.parse(localStorage.getItem("selectedBug") || "{}");
-        bugIdToSend = sel._id || sel.id || null;
-      } catch (e) {
-        bugIdToSend = null;
-      }
-    }
-
-    try {
-      setLoadingReplies(true);
-      if (typeof commentApi.getReplyToComment !== "function") {
-        setFetchedReplies([]);
-        return;
-      }
-      const res = await commentApi.getReplyToComment({
-        parentId: comment.id || comment._id,
-        bugId: bugIdToSend,
-      });
-
-      const rawList = normalizeReplyPayload(res);
-      const normalized = rawList.map((r) => {
-        const rid = r.id || r._id || `${Date.now()}_${Math.random()}`;
-        const rAuthor =
-          resolveAuthorFieldToName(r.author) ||
-          resolveAuthorFieldToName(r.createdBy) ||
-          resolveAuthorFieldToName(r.user) ||
-          "Unknown";
-        const rDate = r.createdAt || r.date || r.updatedAt || null;
-
-        return {
-          ...r,
-          id: rid,
-          _id: r._id || rid,
-          author: rAuthor,
-          date: rDate,
-        };
-      });
-
-      setFetchedReplies(normalized);
-    } catch (err) {
-      console.error("Error fetching replies:", err);
-      setFetchedReplies([]); // prevent infinite loading
-    } finally {
-      setLoadingReplies(false);
-    }
-  };
-
-  // toggleReplies toggles collapse; when expanding, fetch if needed
-  const toggleReplies = async () => {
-    if (isRepliesCollapsed) {
-      await fetchReplies();
-      setIsRepliesCollapsed(false);
-    } else {
-      setIsRepliesCollapsed(true);
-    }
-  };
-
-  // Merge / reconcile new replies passed through comment.replies (if parent updates them)
-  useEffect(() => {
-    const incoming = Array.isArray(comment?.replies) ? comment.replies : [];
-    if (incoming.length === 0) {
-      setFetchedReplies((prev) => {
-        if (prev === null) return null;
-        return [];
-      });
+  // Load replies when showing them
+  const loadReplies = async () => {
+    if (showReplies) {
+      setShowReplies(false);
       return;
     }
 
-    const normalizedIncoming = incoming.map((r) => {
-      const rid = r.id || r._id || `${Date.now()}_${Math.random()}`;
-      const rAuthor =
-        resolveAuthorFieldToName(r.author) ||
-        resolveAuthorFieldToName(r.createdBy) ||
-        "Unknown";
-      const rDate = r.createdAt || r.date || r.updatedAt || null;
-      return { ...r, id: rid, _id: r._id || rid, author: rAuthor, date: rDate };
-    });
-
-    setFetchedReplies((prev) => {
-      if (prev === null) {
-        return normalizedIncoming;
-      }
-
-      // Reconcile: keep prev items present in incoming, then append new incoming
-      const incomingIds = new Set(normalizedIncoming.map((x) => String(x.id)));
-      const kept = prev.filter((p) => incomingIds.has(String(p.id)));
-      const keptIds = new Set(kept.map((p) => String(p.id)));
-      for (const inc of normalizedIncoming) {
-        if (!keptIds.has(String(inc.id))) kept.push(inc);
-      }
-      return kept;
-    });
-  }, [comment?.replies]);
-
-  // Choose which replies to render: prefer fetchedReplies when loaded, else fallback
-  const repliesToRender =
-    fetchedReplies !== null
-      ? fetchedReplies
-      : Array.isArray(comment?.replies)
-      ? comment.replies
-      : [];
-
-  // total replies count (shows even when collapsed)
-  const totalRepliesCount =
-    (comment?.replies && comment.replies.length) ??
-    (fetchedReplies ? fetchedReplies.length : 0);
-
-  // Determine date to display robustly (support createdAt or date)
-  const displayedDate = comment?.createdAt || comment?.date || comment?.updatedAt;
-
-  // ---------- Deletion + Undo logic ----------
-
-  // helper to push a new toast
-  const pushToast = (toast) => {
-    setToasts((t) => {
-      const next = [toast, ...t].slice(0, MAX_VISIBLE_TOASTS);
-      return next;
-    });
-  };
-
-  const removeToastById = (id) => {
-    setToasts((t) => t.filter((x) => x.id !== id));
-  };
-
-  // Reply deletion
-  const handleDeleteReply = async (parentId, replyObj) => {
-    const targetId = replyObj.id || replyObj._id || null;
-    if (!targetId) return console.warn("No id found on replyObj", replyObj);
-
-    const targetKey = String(targetId);
-
-    // Optimistically remove from local state immediately
-    setFetchedReplies((prev) =>
-      prev ? prev.filter((r) => String(r.id || r._id || "") !== targetKey) : prev
-    );
-
-    // Also tell parent to remove it from its canonical state
-    if (typeof removeReply === "function") {
-      try {
-        removeReply(parentId, targetId, replyObj);
-      } catch (err) {
-        try {
-          removeReply(parentId, targetId);
-        } catch (e) {
-          console.warn("parent removeReply failed:", e);
-        }
-      }
+    if (repliesLoaded && replies.length > 0) {
+      setShowReplies(true);
+      return;
     }
 
-    const toastId = `del_reply_${Date.now()}_${Math.random()}`;
-    const title = `${storedUser.name} deleted reply`;
-    const message = `A reply was deleted`;
-    const s = snippet(replyObj.text || replyObj.body || replyObj.message || "", 120);
-
-    pushToast({
-      id: toastId,
-      title,
-      message,
-      snippet: s,
-      canUndo: false,
-    });
-
+    setLoading(true);
     try {
-      // Delete the reply on backend
-      if (typeof commentApi.deleteReply === "function") {
-        await commentApi.deleteReply({ parentId, replyId: targetId });
-      }
-
-      // After successful deletion, fetch fresh replies for this parent comment (best-effort)
-      let bugIdToSend = null;
-      try {
-        const sel = JSON.parse(localStorage.getItem("selectedBug") || "{}");
-        bugIdToSend = sel._id || sel.id || null;
-      } catch (e) {
-        bugIdToSend = null;
-      }
-
-      if (typeof commentApi.getReplyToComment === "function") {
-        const res = await commentApi.getReplyToComment({
-          parentId,
-          bugId: bugIdToSend,
-        });
-        const rawList = Array.isArray(res) ? res : res.data || res.replies || [];
-        const normalized = rawList.map((r) => ({
+      console.log("Loading replies for comment:", commentId);
+      
+      const response = await commentApi.getRepliesForComment({
+        parentId: commentId,
+      });
+      
+      console.log("Reply response:", response);
+      
+      if (response?.replies && Array.isArray(response.replies)) {
+        const normalizedReplies = response.replies.map(r => ({
           ...r,
-          id: r.id || r._id || `${Date.now()}_${Math.random()}`,
-          _id: r._id || r.id || `${Date.now()}_${Math.random()}`,
-          author:
-            resolveAuthorFieldToName(r.author) ||
-            resolveAuthorFieldToName(r.createdBy) ||
-            resolveAuthorFieldToName(r.user) ||
-            "Unknown",
-          date: r.createdAt || r.date || new Date().toISOString(),
+          id: r._id || r.id,
+          author: {
+            id: r.createdBy?._id || r.createdBy?.id || r.createdBy,
+            name: r.createdBy?.name || "Unknown User",
+            email: r.createdBy?.email || ""
+          }
         }));
-
-        setFetchedReplies(normalized);
-      }
-
-      pushToast({
-        id: `${toastId}_confirm`,
-        title: "Deletion confirmed",
-        message: `Reply permanently deleted and updated`,
-        snippet: s,
-        canUndo: false,
-      });
-    } catch (err) {
-      console.error("Delete or fetch failed:", err);
-
-      pushToast({
-        id: `${toastId}_err`,
-        title: "Delete failed",
-        message: "Could not delete reply or fetch fresh replies from server.",
-        snippet: s,
-        canUndo: false,
-      });
-    } finally {
-      delete pendingDeletesRef.current[toastId];
-      removeToastById(toastId);
-    }
-  };
-
-  // Undo handler for reply deletion (kept for compatibility but replies are no-undo now)
-  const handleUndo = async (toastId) => {
-    const pending = pendingDeletesRef.current[toastId];
-    if (!pending) {
-      removeToastById(toastId);
-      return;
-    }
-
-    clearTimeout(pending.timerId);
-    const { type, data: replyObj, parentId } = pending;
-
-    let restored = null;
-    try {
-      if (type === "reply") {
-        if (typeof commentApi.createReply === "function") {
-          const createRes = await commentApi.createReply({
-            parentId,
-            text: replyObj.text || replyObj.body || "",
-          });
-          const created = (createRes && (createRes.data || createRes)) || null;
-          if (created) {
-            restored = {
-              id: created.id || created._id || `${Date.now()}_${Math.random()}`,
-              ...created,
-              author: replyObj.author || storedUser.name,
-              date: created.createdAt || new Date().toISOString(),
-            };
-          }
-        }
-      }
-    } catch (err) {
-      console.warn("Backend restore failed (createReply)", err);
-      restored = null;
-    }
-
-    if (!restored) {
-      if (typeof addReply === "function") {
-        try {
-          try {
-            addReply(parentId, replyObj);
-            restored = replyObj;
-          } catch (e) {
-            addReply(parentId, replyObj.text || replyObj.body || "");
-            restored = replyObj;
-          }
-        } catch (e) {
-          console.warn("addReply fallback failed", e);
-        }
+        console.log("Normalized replies:", normalizedReplies);
+        setReplies(normalizedReplies);
+        setRepliesLoaded(true);
+        setShowReplies(true);
       } else {
-        setFetchedReplies((prev) => {
-          const r = {
-            ...replyObj,
-            id: replyObj.id || `${Date.now()}_${Math.random()}`,
-            author: replyObj.author || storedUser.name,
-            date: replyObj.date || new Date().toISOString(),
-          };
-          if (prev === null) return [r];
-          return [r, ...prev];
-        });
-        restored = replyObj;
+        console.log("No replies found or invalid response format");
+        setReplies([]);
+        setRepliesLoaded(true);
+        setShowReplies(true);
       }
-    } else {
-      setFetchedReplies((prev) => {
-        if (prev === null) return [restored];
-        if (prev.some((p) => String(p.id) === String(restored.id))) return prev;
-        return [restored, ...prev];
-      });
+    } catch (err) {
+      console.error("Failed to load replies:", err);
+      showNotification("Failed to load replies", "error");
+    } finally {
+      setLoading(false);
     }
-
-    delete pendingDeletesRef.current[toastId];
-    removeToastById(toastId);
-
-    pushToast({
-      id: `${toastId}_restored_${Date.now()}`,
-      title: "Restored",
-      message: `${storedUser.name} restored a reply`,
-      snippet: snippet(restored?.text || restored?.body || "", 120),
-      canUndo: false,
-    });
   };
 
-  // When deleting a top-level comment: immediate remove, show toast (no undo), delay backend delete
-  const handleDeleteComment = (commentObj) => {
-    const commentId = commentObj.id || commentObj._id;
-    if (!commentId) {
-      console.warn("No id on comment to delete", commentObj);
+  // Enhanced addReply function that updates local state immediately
+  const handleAddReply = async () => {
+    const text = (replyInput || "").trim();
+    if (!text) return;
+
+    const teamId = getTeamId();
+    const bugId = comment.bugId || 
+      JSON.parse(localStorage.getItem(`comments_${teamId}`) || "{}")._id;
+
+    setLoading(true);
+    try {
+      console.log("Creating reply with:", { parentId: commentId, text, bugId, teamId });
+      
+      const savedReply = await commentApi.createReply({
+        parentId: commentId,
+        text,
+        bugId,
+        teamId,
+      });
+
+      console.log("Reply created:", savedReply);
+
+      // Normalize the saved reply
+      const normalizedReply = {
+        ...savedReply,
+        id: savedReply._id || savedReply.id,
+        author: {
+          id: savedReply.createdBy?._id || savedReply.createdBy?.id || savedReply.createdBy || storedUser.id,
+          name: savedReply.createdBy?.name || storedUser.name,
+          email: savedReply.createdBy?.email || storedUser.email
+        }
+      };
+
+      // Update local replies state immediately
+      setReplies(prev => [...prev, normalizedReply]);
+      setShowReplies(true);
+      setRepliesLoaded(true);
+      
+      // Call parent addReply for global state update
+      if (addReply) {
+        await addReply(commentId);
+      }
+      
+      showNotification("Reply added successfully!", "success");
+    } catch (err) {
+      console.error("Failed to add reply:", err);
+      showNotification("Failed to add reply. Please try again.", "error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Save comment edit
+  const saveEdit = async () => {
+    const trimmed = editText.trim();
+    if (!trimmed) return;
+
+    setLoading(true);
+    try {
+      await updateComment(commentId, trimmed);
+      setIsEditing(false);
+      showNotification("Comment updated successfully!", "success");
+    } catch (err) {
+      console.error("Failed to update comment:", err);
+      showNotification("Failed to update comment", "error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Save reply edit
+  const saveReplyEdit = async (replyId) => {
+    const trimmed = editingReplyText.trim();
+    if (!trimmed) return;
+
+    setLoading(true);
+    try {
+      console.log("Updating reply:", { parentId: commentId, replyId, text: trimmed });
+      
+      await commentApi.updateReply({
+        parentId: commentId,
+        replyId,
+        text: trimmed,
+        teamId: getTeamId(),
+      });
+
+      // Update local reply state
+      setReplies(prev => prev.map(r => 
+        (r.id === replyId || r._id === replyId) 
+          ? { ...r, text: trimmed }
+          : r
+      ));
+
+      setEditingReplyId(null);
+      setEditingReplyText("");
+      showNotification("Reply updated successfully!", "success");
+    } catch (err) {
+      console.error("Failed to update reply:", err);
+      showNotification("Failed to update reply", "error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Cancel comment edit
+  const cancelEdit = () => {
+    setEditText(comment.text || "");
+    setIsEditing(false);
+  };
+
+  // Cancel reply edit
+  const cancelReplyEdit = () => {
+    setEditingReplyId(null);
+    setEditingReplyText("");
+  };
+
+  // Delete comment
+  const handleDelete = async () => {
+    if (!window.confirm("Are you sure you want to delete this comment? This action cannot be undone.")) {
       return;
     }
 
-    // remove from UI immediately
-    if (typeof removeComment === "function") removeComment(commentId);
-
-    const toastId = `del_comment_${Date.now()}_${Math.random()}`;
-    const title = `${storedUser.name} deleted comment`;
-    const message = `A comment was deleted`;
-    const s = snippet(commentObj.text || commentObj.body || "", 140);
-
-    // schedule backend delete after TOAST_DURATION
-    const timerId = setTimeout(async () => {
-      try {
-        if (typeof commentApi.deleteComment === "function") {
-          await commentApi.deleteComment({ commentId });
-        }
-        pushToast({
-          id: `${toastId}_confirm`,
-          title: "Deletion confirmed",
-          message: `Comment permanently deleted`,
-          snippet: s,
-          canUndo: false,
-        });
-      } catch (err) {
-        console.error("Error deleting comment on backend:", err);
-        pushToast({
-          id: `${toastId}_err`,
-          title: "Delete failed",
-          message: "Could not delete comment on server.",
-          snippet: s,
-          canUndo: false,
-        });
-      } finally {
-        delete pendingDeletesRef.current[toastId];
-        removeToastById(toastId);
-      }
-    }, TOAST_DURATION);
-
-    pendingDeletesRef.current[toastId] = {
-      timerId,
-      type: "comment",
-      data: commentObj,
-    };
-
-    pushToast({
-      id: toastId,
-      title,
-      message,
-      snippet: s,
-      canUndo: false,
-    });
-  };
-
-  // Exposed handler when user clicks the delete button in UI
-  const onDeleteClick = () => {
-    if (isReply) {
-      handleDeleteReply(comment.parentId, comment);
-    } else {
-      handleDeleteComment(comment);
+    setLoading(true);
+    try {
+      await removeComment(commentId);
+      showNotification("Comment deleted successfully!", "success");
+    } catch (err) {
+      console.error("Failed to delete comment:", err);
+      showNotification("Failed to delete comment", "error");
+    } finally {
+      setLoading(false);
     }
   };
+
+  // Delete reply
+  const handleDeleteReply = async (replyId) => {
+    if (!window.confirm("Are you sure you want to delete this reply? This action cannot be undone.")) {
+      return;
+    }
+
+    setLoading(true);
+    try {
+      console.log("Deleting reply:", { parentId: commentId, replyId });
+      
+      await commentApi.deleteReply({
+        parentId: commentId,
+        replyId,
+        teamId: getTeamId(),
+      });
+
+      // Remove from local state immediately
+      setReplies(prev => prev.filter(r => r.id !== replyId && r._id !== replyId));
+      
+      // Also call parent removeReply if available
+      if (removeReply) {
+        await removeReply(commentId, replyId);
+      }
+      
+      showNotification("Reply deleted successfully!", "success");
+    } catch (err) {
+      console.error("Failed to delete reply:", err);
+      showNotification("Failed to delete reply", "error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle keyboard shortcuts in edit mode
+  const handleEditKeyDown = (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      saveEdit();
+    } else if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      saveEdit();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      cancelEdit();
+    }
+  };
+
+  // Handle keyboard shortcuts in reply input
+  const handleReplyKeyDown = (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleAddReply();
+    } else if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      handleAddReply();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      setReplyingTo(null);
+    }
+  };
+
+  // Extract author info with proper fallback
+  const author = comment.author || {
+    id: comment.createdBy?._id || comment.createdBy?.id || comment.createdBy,
+    name: comment.createdBy?.name || "Unknown User",
+    email: comment.createdBy?.email || ""
+  };
+
+  const authorInitials = author.name ? author.name.split(" ").map(n => n[0]).join("").toUpperCase() : "?";
+  const authorGradient = pickGradient(author.name || "unknown");
+
+  // Get reply count
+  const replyCount = comment.repliesCount || replies.length || 0;
 
   return (
-    <>
-      <div
-        className={`transition-transform duration-150 ${isReply ? "ml-6" : ""}`}
-        style={{
-          border: "1px solid var(--border)",
-          background: "var(--surface)",
-          borderRadius: 12,
-        }}
-      >
-        <div className="p-3 flex gap-3 items-start">
-          <div className="flex-shrink-0">
-            <div
-              className="w-10 h-10 rounded-full flex items-center justify-center font-semibold text-sm"
-              style={{
-                background: pickGradient(authorName || "u"),
-                color: "white",
-                boxShadow: "0 6px 18px rgba(0,0,0,0.55)",
-              }}
-            >
-              {avatarText}
-            </div>
-          </div>
+    <div
+      className="w-full rounded-xl transition-all duration-200 hover:bg-opacity-60"
+      style={{
+        background: "rgba(255,255,255,0.03)",
+        border: "1px solid rgba(255,255,255,0.08)",
+        padding: "20px",
+      }}
+    >
+      {/* Comment Header */}
+      <div className="flex items-start gap-4 mb-4">
+        {/* Author Avatar */}
+        <div
+          className="w-11 h-11 rounded-full flex items-center justify-center text-sm font-bold text-white shadow-lg flex-shrink-0"
+          style={{ background: authorGradient }}
+        >
+          {authorInitials}
+        </div>
 
-          <div className="flex-1 min-w-0">
-            <div className="flex items-start justify-between gap-3">
-              <div style={{ overflow: "hidden" }}>
-                <div className="flex items-center gap-2">
-                  <div
-                    className="text-sm font-medium"
-                    style={{ color: "var(--text)" }}
-                  >
-                    {authorName}
-                  </div>
-                  <div className="text-xs" style={{ color: "var(--muted)" }}>
-                    {formatRelativeTime(displayedDate)}
-                  </div>
-                  {comment?.role && (
-                    <div
-                      className="text-xs px-2 py-[2px] rounded"
-                      style={{
-                        background: "rgba(255,255,255,0.02)",
-                        color: "var(--muted)",
-                        marginLeft: 6,
-                      }}
-                    >
-                      {comment.role}
-                    </div>
-                  )}
-                </div>
+        {/* Author Info & Actions */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="font-semibold text-white text-base">
+                {author.name}
               </div>
-
-              <div
-                className="flex items-center gap-2 text-sm"
-                style={{ whiteSpace: "nowrap" }}
-              >
-                {/* Reply opens inline reply input */}
-                {!isReply && (
-                  <button
-                    onClick={() => setReplyingTo(comment.id || comment._id)}
-                    className="px-2 py-1 rounded hover:bg-[rgba(255,255,255,0.02)] transition"
-                    style={{ color: "var(--muted)" }}
-                  >
-                    Reply
-                  </button>
-                )}
-
-                {(authorName === (currentUser?.name || storedUser.name)) && (
-                  <button
-                    onClick={handleEditToggle}
-                    className="px-2 py-1 rounded hover:bg-[rgba(255,255,255,0.02)] transition"
-                    style={{ color: "var(--muted)" }}
-                  >
-                    {isEditing ? "Save" : "Edit"}
-                  </button>
-                )}
-
-                <button
-                  onClick={onDeleteClick}
-                  className="px-2 py-1 rounded hover:bg-[rgba(255,255,255,0.02)] transition"
-                  title="Delete"
-                  style={{ color: "var(--muted)" }}
-                >
-                  ✕
-                </button>
+              {author.email && (
+                <div className="text-xs text-gray-400 mt-1">
+                  {author.email}
+                </div>
+              )}
+              <div className="text-xs text-gray-500 mt-1">
+                {formatRelativeTime(comment.createdAt || comment.date)}
               </div>
             </div>
 
-            {isEditing ? (
-              <textarea
-                value={editText}
-                onChange={(e) => setEditText(e.target.value)}
-                className="mt-3 w-full text-sm rounded-md px-3 py-2"
-                rows={3}
-                style={{
-                  background: "transparent",
-                  border: "1px solid var(--border)",
-                  color: "var(--text)",
-                  boxShadow: "inset 0 2px 6px rgba(0,0,0,0.35)",
-                }}
-              />
-            ) : (
-              <div
-                className="mt-3 text-sm leading-relaxed"
-                style={{ color: "var(--text)" }}
-                dangerouslySetInnerHTML={{
-                  __html: parseText(comment?.text || ""),
-                }}
-              />
-            )}
-
-            {/* Replies toggle & list */}
-            {!isReply && (
-              <div className="mt-3">
-                {/* Show reply count + toggle */}
-                <div className="flex items-center gap-2">
+            {/* Action Buttons */}
+            {isCurrentUserComment && (
+              <div className="flex items-center gap-2">
+                {!isEditing && (
                   <button
-                    onClick={toggleReplies}
-                    className="text-xs"
-                    style={{ color: "var(--muted)" }}
+                    onClick={() => setIsEditing(true)}
+                    disabled={loading}
+                    className="text-xs text-blue-400 hover:text-blue-300 transition px-3 py-1.5 rounded-md hover:bg-blue-500/10 flex items-center gap-1"
+                    title="Edit comment"
                   >
-                    {isRepliesCollapsed
-                      ? `Show replies (${totalRepliesCount})`
-                      : `Hide replies (${totalRepliesCount})`}
+                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                    </svg>
+                    Edit
                   </button>
-                  {loadingReplies && (
-                    <div className="text-xs" style={{ color: "var(--muted)" }}>
-                      Loading…
-                    </div>
-                  )}
-                </div>
-
-                {/* List (only when expanded and not loading) */}
-                {!isRepliesCollapsed && (
-                  <div className="mt-3 space-y-3">
-                    {!loadingReplies && repliesToRender?.length > 0
-                      ? repliesToRender.map((r) => (
-                          <CommentItem
-                            key={r.id || r._id}
-                            comment={{ ...r, parentId: comment.id || comment._id }}
-                            removeComment={removeComment}
-                            removeReply={(parentId, replyId) => {
-                              if (typeof removeReply === "function")
-                                removeReply(parentId, replyId);
-                            }}
-                            setReplyingTo={setReplyingTo}
-                            replyingTo={replyingTo}
-                            replyInput={replyInput}
-                            setReplyInput={setReplyInput}
-                            addReply={addReply}
-                            updateComment={updateComment}
-                            currentUser={currentUser}
-                          />
-                        ))
-                      : null}
-
-                    {!loadingReplies && repliesToRender?.length === 0 && (
-                      <div className="text-xs text-gray-500">No replies yet</div>
-                    )}
-                  </div>
                 )}
-              </div>
-            )}
-
-            {/* Inline reply input */}
-            {!isReply && replyingTo === (comment.id || comment._id) && (
-              <div className="mt-3 flex gap-2 items-start">
-                <input
-                  ref={replyInputRef}
-                  type="text"
-                  value={replyInput || ""}
-                  onChange={(e) => setReplyInput && setReplyInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      addReply && addReply(comment.id || comment._id);
-                    }
-                  }}
-                  placeholder="Write a reply..."
-                  className="flex-1 text-sm rounded-full px-4 py-2 outline-none"
-                  style={{
-                    background: "transparent",
-                    border: "1px solid var(--border)",
-                    color: "var(--text)",
-                    boxShadow: "inset 0 2px 6px rgba(0,0,0,0.35)",
-                  }}
-                />
                 <button
-                  onClick={() => addReply && addReply(comment.id || comment._id)}
-                  className="rounded-full px-3 py-1 text-sm transition"
-                  style={{
-                    background: "linear-gradient(90deg,var(--accent), #4F46E5)",
-                    color: "white",
-                    boxShadow: "0 6px 16px rgba(79,70,229,0.18)",
-                  }}
+                  onClick={handleDelete}
+                  disabled={loading}
+                  className="text-xs text-red-400 hover:text-red-300 transition px-3 py-1.5 rounded-md hover:bg-red-500/10 flex items-center gap-1"
+                  title="Delete comment"
                 >
-                  Reply
-                </button>
-                <button
-                  onClick={() => setReplyingTo && setReplyingTo(null)}
-                  className="px-2 py-1 text-sm"
-                  style={{ color: "var(--muted)" }}
-                >
-                  Cancel
+                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                  Delete
                 </button>
               </div>
             )}
@@ -933,15 +604,178 @@ const CommentItem = ({
         </div>
       </div>
 
-      {/* Toasts UI for this item (local). In a bigger app you'd hoist this to a single provider. */}
-      <Toasts
-        list={toasts}
-        removeToast={(id) => {
-          removeToastById(id);
-        }}
-        onUndo={handleUndo}
-      />
-    </>
+      {/* Comment Content */}
+      <div className="ml-15">
+        {isEditing ? (
+          <div className="space-y-4">
+            <textarea
+              value={editText}
+              onChange={(e) => setEditText(e.target.value)}
+              onKeyDown={handleEditKeyDown}
+              className="w-full p-4 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+              style={{
+                background: "rgba(255,255,255,0.08)",
+                border: "1px solid rgba(124, 58, 237, 0.3)",
+                color: "white",
+                minHeight: "100px"
+              }}
+              placeholder="Edit your comment..."
+              disabled={loading}
+              autoFocus
+            />
+            <div className="flex items-center gap-3">
+              <button
+                onClick={saveEdit}
+                disabled={loading || !editText.trim()}
+                className="px-4 py-2 bg-purple-500 hover:bg-purple-600 disabled:bg-gray-600 text-white text-sm rounded-md transition flex items-center gap-1"
+              >
+                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                </svg>
+                {loading ? "Saving..." : "Save"}
+              </button>
+              <button
+                onClick={cancelEdit}
+                disabled={loading}
+                className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white text-sm rounded-md transition flex items-center gap-1"
+              >
+                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+                Cancel
+              </button>
+              <div className="text-xs text-gray-400 ml-2">
+                Enter or Ctrl+Enter to save • Esc to cancel
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div>
+            <div
+              className="text-sm text-gray-200 mb-4 leading-relaxed"
+              dangerouslySetInnerHTML={{ __html: parseText(comment.text) }}
+            />
+
+            {/* Reply Action */}
+            <div className="flex items-center gap-6 mb-4">
+              <button
+                onClick={() => setReplyingTo(commentId)}
+                className="text-sm text-blue-400 hover:text-blue-300 transition flex items-center gap-2 px-3 py-1.5 rounded-md hover:bg-blue-500/10"
+                title="Reply to comment"
+              >
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M7.707 3.293a1 1 0 010 1.414L5.414 7H11a7 7 0 017 7v2a1 1 0 11-2 0v-2a5 5 0 00-5-5H5.414l2.293 2.293a1 1 0 11-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
+                </svg>
+                Reply
+              </button>
+
+              {replyCount > 0 && (
+                <button
+                  onClick={loadReplies}
+                  disabled={loading}
+                  className="text-sm text-gray-400 hover:text-gray-300 transition flex items-center gap-2 px-3 py-1.5 rounded-md hover:bg-gray-500/10"
+                >
+                  {loading ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-gray-300 border-t-transparent rounded-full animate-spin"></div>
+                      Loading...
+                    </>
+                  ) : (
+                    <>
+                      {showReplies ? "Hide replies" : `Show ${replyCount} replies`}
+                      <svg className={`w-4 h-4 transition-transform ${showReplies ? 'rotate-180' : ''}`} fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                      </svg>
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Reply Input */}
+        {replyingTo === commentId && (
+          <div className="mb-6 p-4 rounded-xl" style={{ background: "rgba(124, 58, 237, 0.08)", border: "1px solid rgba(124, 58, 237, 0.2)" }}>
+            <textarea
+              value={replyInput}
+              onChange={(e) => setReplyInput(e.target.value)}
+              onKeyDown={handleReplyKeyDown}
+              className="w-full p-3 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+              style={{
+                background: "rgba(255,255,255,0.08)",
+                border: "1px solid rgba(255,255,255,0.1)",
+                color: "white",
+                minHeight: "80px"
+              }}
+              placeholder="Write a reply..."
+            />
+            <div className="flex items-center justify-between mt-3">
+              <div className="text-xs text-gray-400">
+                Enter to send • Esc to cancel
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleAddReply}
+                  disabled={!replyInput.trim() || loading}
+                  className="px-4 py-2 bg-purple-500 hover:bg-purple-600 disabled:bg-gray-600 text-white text-sm rounded-md transition"
+                >
+                  {loading ? "Sending..." : "Reply"}
+                </button>
+                <button
+                  onClick={() => setReplyingTo(null)}
+                  className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white text-sm rounded-md transition"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Replies */}
+        {showReplies && (
+          <div className="space-y-3 pl-6 border-l-2 border-purple-500/30">
+            {replies.length > 0 ? (
+              replies.map((reply) => {
+                const isCurrentUserReply = 
+                  storedUser.id === reply.author?.id || 
+                  storedUser.id === reply.createdBy?._id ||
+                  (currentUser && (
+                    currentUser.id === reply.author?.id || 
+                    currentUser._id === reply.author?.id ||
+                    currentUser.id === reply.createdBy?._id ||
+                    currentUser._id === reply.createdBy?._id
+                  ));
+
+                return (
+                  <ReplyItem
+                    key={reply.id || reply._id}
+                    reply={reply}
+                    isCurrentUserReply={isCurrentUserReply}
+                    onDelete={() => handleDeleteReply(reply.id || reply._id)}
+                    onEdit={() => {
+                      setEditingReplyId(reply.id || reply._id);
+                      setEditingReplyText(reply.text || "");
+                    }}
+                    loading={loading}
+                    isEditing={editingReplyId === (reply.id || reply._id)}
+                    editText={editingReplyText}
+                    setEditText={setEditingReplyText}
+                    onSaveEdit={() => saveReplyEdit(reply.id || reply._id)}
+                    onCancelEdit={cancelReplyEdit}
+                  />
+                );
+              })
+            ) : (
+              <div className="text-sm text-gray-500 italic p-4">
+                No replies yet. Be the first to reply!
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
   );
 };
 

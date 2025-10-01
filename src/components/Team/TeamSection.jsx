@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import TeamCard from "./TeamCard";
+import NoTeamState from "./NoTeamState";
 import { Search, Settings, X, UserPlus, Plus, Trash2 } from "lucide-react";
 import axios from "axios";
 const backendUrl = import.meta.env.VITE_BACKEND_URL;
@@ -88,6 +89,7 @@ const TeamSection = () => {
   // Members from backend
   const [allMembers, setAllMembers] = useState([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Modals
   const [showModal, setShowModal] = useState(false); // add member
@@ -108,16 +110,12 @@ const TeamSection = () => {
   // ---------------- Fetch all teams (sync with localStorage fallback) ----------------
   useEffect(() => {
     const getAllTeams = async () => {
+      setIsLoading(true);
       try {
-        const response = await fetch(`${backendUrl}/team/allTeam`, {
-          method: "GET",
-          credentials: "include",
-          headers: {
-            "Content-Type": "application/json",
-          },
+        const response = await axios.get(`${backendUrl}/team/allTeam`, {
+          withCredentials: true,
         });
-        const data = await response.json();
-        const teamsArray = Array.isArray(data.teams) ? data.teams : Array.isArray(data) ? data : [];
+        const teamsArray = Array.isArray(response.data.teams) ? response.data.teams : Array.isArray(response.data) ? response.data : [];
         setTeams(teamsArray);
         writeLocal(teamsArray);
       } catch (err) {
@@ -133,6 +131,8 @@ const TeamSection = () => {
           setTeams([]);
         }
         console.error("Failed to fetch teams:", err);
+      } finally {
+        setIsLoading(false);
       }
     };
 
@@ -638,10 +638,18 @@ const handleRemoveMember = async (team, member) => {
         </button>
       </div>
 
-      {/* Grid with scroll */}
-      <div className=" mt-2 max-h-[500px] overflow-y-auto pr-2">
-        <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {teams.map((team) => (
+      {/* Show loading state or no teams state */}
+      {isLoading ? (
+        <div className="flex justify-center items-center h-[300px]">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+        </div>
+      ) : teams.length === 0 ? (
+        <NoTeamState onCreateTeam={() => setShowCreateModal(true)} />
+      ) : (
+        /* Grid with scroll */
+        <div className="mt-2 max-h-[500px] overflow-y-auto pr-2">
+          <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {teams.map((team) => (
             <TeamCard
               key={team.id ?? team._id}
               team={{ ...team, membersCount: (team.members || []).length }}
@@ -654,6 +662,7 @@ const handleRemoveMember = async (team, member) => {
           ))}
         </div>
       </div>
+    )}
 
       {/* ---------------- Modals ---------------- */}
 

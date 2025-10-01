@@ -160,7 +160,7 @@ const CustomDropdown = ({ options, value, onChange }) => {
     <div ref={dropdownRef} className="relative inline-block text-left">
       <button
         onClick={() => setIsOpen((s) => !s)}
-        className="inline-flex items-center gap-2 rounded-[10px] px-3 py-1 text-sm transition"
+        className="inline-flex items-center gap-2 rounded-[10px] px-3 py-1 text-sm transition hover:bg-opacity-80"
         style={{
           background: "transparent",
           border: "1px solid var(--border)",
@@ -199,7 +199,7 @@ const CustomDropdown = ({ options, value, onChange }) => {
                   onChange(opt.value);
                   setIsOpen(false);
                 }}
-                className="w-full text-left px-3 py-2 text-sm transition-colors"
+                className="w-full text-left px-3 py-2 text-sm transition-colors hover:bg-opacity-80"
                 style={{
                   background:
                     opt.value === value ? "var(--accent)" : "transparent",
@@ -829,7 +829,7 @@ const Comments = ({ bug = {}, updateBug = null }) => {
     [scheduleReplyDeletion]
   );
 
-  // Update comment (existing implementation kept)
+  // Update comment (using proper commentApi)
   const updateComment = useCallback(
     async (id, newText) => {
       const trimmed = (newText || "").trim();
@@ -842,60 +842,31 @@ const Comments = ({ bug = {}, updateBug = null }) => {
       }
 
       try {
-        const storedBug = JSON.parse(localStorage.getItem("selectedBug"));
-        if (!storedBug)
-          throw new Error("No selected bug found in localStorage");
+        // Use the proper commentApi.updateComment function
+        const updatedComment = await commentApi.updateComment({
+          commentId: id,
+          text: trimmed,
+        });
 
-        const res = await axios.patch(
-          `${backendUrl}/manage/${id}`, // matches your backend route
-          {
-            text: newText,
-            bug: storedBug, // send the selected bug in request body
-          },
-          {
-            withCredentials: true, // send cookies for authentication
-          }
-        );
-
-        let updatedFromServer = null;
-        if (res && res.data) {
-          if (res.data.data) updatedFromServer = res.data.data;
-          else if (res.data._id || res.data.id) updatedFromServer = res.data;
-          else if (res.data.comment) updatedFromServer = res.data.comment;
-        } else if (res && (res._id || res.id || res.comment)) {
-          updatedFromServer = res.data || res.comment || res;
-        }
-
+        // Update the comments state
         const current = commentsRef.current || [];
         const updatedComments = current.map((c) => {
           if (c.id === id) {
-            const newC = {
+            return {
               ...c,
-              text: updatedFromServer ? updatedFromServer.text : trimmed,
+              text: updatedComment?.comment?.text || trimmed,
+              updatedAt: updatedComment?.comment?.updatedAt || new Date().toISOString(),
             };
-            return newC;
-          }
-
-          if (c.replies && c.replies.length) {
-            const newReplies = c.replies.map((r) =>
-              r.id === id
-                ? {
-                    ...r,
-                    text: updatedFromServer ? updatedFromServer.text : trimmed,
-                  }
-                : r
-            );
-            return { ...c, replies: newReplies };
           }
           return c;
         });
 
-        updateLocalStorage(updatedComments);
+        setComments(updatedComments);
+        commentsRef.current = updatedComments;
 
         pushToast({
-          title: currentUser.name,
-          message: "Edited a comment",
-          snippet: snippet(trimmed, 120),
+          title: "Success",
+          message: "Comment updated successfully.",
         });
       } catch (err) {
         console.error("Failed to update comment:", err);
@@ -905,7 +876,7 @@ const Comments = ({ bug = {}, updateBug = null }) => {
         });
       }
     },
-    [updateLocalStorage, pushToast]
+    [pushToast]
   );
 
   // Keyboard shortcuts
@@ -1142,33 +1113,53 @@ const Comments = ({ bug = {}, updateBug = null }) => {
       </div>
 
       {/* input area */}
-      <div className="p-4" style={{ borderTop: "1px solid var(--border)" }}>
+      <div className="p-5" style={{ borderTop: "1px solid var(--border)" }}>
         <div className="relative flex items-center">
           <div style={{ flex: 1, position: "relative" }}>
             <div
               className="cs-write-wrap"
               style={{
-                borderRadius: 14,
-                padding: "12px 140px 12px 20px",
-                background: "rgba(255,255,255,0.01)",
-                border: "1px solid rgba(255,255,255,0.04)",
-                boxShadow: "inset 0 6px 18px rgba(0,0,0,0.6)",
+                borderRadius: 16,
+                padding: "16px 140px 16px 24px",
+                background: "rgba(255,255,255,0.04)",
+                border: "1px solid rgba(255,255,255,0.08)",
+                boxShadow: "inset 0 4px 12px rgba(0,0,0,0.4)",
+                transition: "all 0.2s ease",
               }}
             >
-              <input
+              <textarea
                 ref={inputRef}
-                className="cs-write-input bg-transparent w-full"
-                style={{ color: "var(--text)", fontSize: 16 }}
+                className="cs-write-input bg-transparent w-full resize-none focus:outline-none"
+                style={{ 
+                  color: "var(--text)", 
+                  fontSize: 16,
+                  minHeight: "24px",
+                  maxHeight: "120px",
+                  overflow: "hidden"
+                }}
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder="Write a comment..."
+                onChange={(e) => {
+                  setInput(e.target.value);
+                  // Auto-resize textarea
+                  e.target.style.height = "24px";
+                  e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px";
+                }}
+                placeholder="Write a comment... (Enter to send, Shift+Enter for new line)"
                 onFocus={() => setShowAdvancedInput(true)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
+                  if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
                     e.preventDefault();
                     addComment();
+                  } else if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+                    e.preventDefault();
+                    addComment();
+                  } else if (e.key === "Escape") {
+                    e.preventDefault();
+                    setShowAdvancedInput(false);
+                    e.target.blur();
                   }
                 }}
+                rows={1}
               />
             </div>
             <button
@@ -1177,19 +1168,19 @@ const Comments = ({ bug = {}, updateBug = null }) => {
               className="cs-send-btn"
               style={{
                 position: "absolute",
-                right: 5,
+                right: 8,
                 top: "50%",
                 transform: "translateY(-50%)",
-                height: 38,
-                width: 104,
-                borderRadius: 12,
+                height: 42,
+                width: 110,
+                borderRadius: 14,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 gap: 8,
                 fontWeight: 700,
                 cursor: (input || "").trim() === "" ? "not-allowed" : "pointer",
-                transition: "all .14s ease",
+                transition: "all .2s ease",
                 background:
                   (input || "").trim() === ""
                     ? "linear-gradient(90deg,#333,#2b2b2b)"
@@ -1198,9 +1189,11 @@ const Comments = ({ bug = {}, updateBug = null }) => {
                 boxShadow:
                   (input || "").trim() === ""
                     ? "none"
-                    : "0 8px 28px rgba(79,70,229,0.20)",
+                    : "0 6px 20px rgba(79,70,229,0.25)",
                 opacity: (input || "").trim() === "" ? 0.6 : 1,
+                border: "none",
               }}
+              title="Send comment (Enter or Ctrl+Enter)"
             >
               <svg
                 width="16"
@@ -1217,12 +1210,12 @@ const Comments = ({ bug = {}, updateBug = null }) => {
         </div>
 
         {showAdvancedInput && (
-          <div className="flex items-center justify-between mt-3">
-            <div className="flex items-center gap-2" ref={emojiRef}>
+          <div className="flex items-center justify-between mt-4">
+            <div className="flex items-center gap-3" ref={emojiRef}>
               <button
                 onClick={() => setShowAdvancedInput(false)}
-                title="Close extra"
-                className="p-1 rounded-md"
+                title="Close extra options"
+                className="p-2 rounded-lg hover:bg-white/5 transition-colors"
                 style={{ color: "var(--muted)" }}
               >
                 ✕
@@ -1230,14 +1223,15 @@ const Comments = ({ bug = {}, updateBug = null }) => {
               <div className="relative">
                 <button
                   onClick={toggleEmojiPicker}
-                  className="p-1 rounded-md"
+                  className="p-2 rounded-lg hover:bg-white/5 transition-colors"
                   style={{ color: "var(--muted)" }}
+                  title="Add emoji"
                 >
                   😊
                 </button>
                 {showEmojiPicker && (
                   <div
-                    className="absolute left-0 bottom-12 w-44 rounded-md shadow-lg p-2 z-50"
+                    className="absolute left-0 bottom-12 w-44 rounded-lg shadow-lg p-3 z-50"
                     style={{
                       background: "var(--surface)",
                       border: "1px solid var(--border)",
@@ -1248,7 +1242,7 @@ const Comments = ({ bug = {}, updateBug = null }) => {
                         <button
                           key={emo}
                           onClick={() => addEmoji(emo)}
-                          className="p-1 text-lg rounded"
+                          className="p-2 text-lg rounded-md hover:bg-white/10 transition-colors"
                         >
                           {emo}
                         </button>
@@ -1264,8 +1258,15 @@ const Comments = ({ bug = {}, updateBug = null }) => {
                 )}
               </div>
             </div>
-            <div className="text-xs" style={{ color: "var(--muted)" }}>
-              Press Ctrl+Enter to send.
+            <div className="text-xs flex items-center gap-2" style={{ color: "var(--muted)" }}>
+              <kbd className="px-2 py-1 rounded text-xs" style={{ background: "rgba(255,255,255,0.1)" }}>Enter</kbd>
+              <span>to send</span>
+              <span>•</span>
+              <kbd className="px-2 py-1 rounded text-xs" style={{ background: "rgba(255,255,255,0.1)" }}>Shift+Enter</kbd>
+              <span>for new line</span>
+              <span>•</span>
+              <kbd className="px-2 py-1 rounded text-xs" style={{ background: "rgba(255,255,255,0.1)" }}>Esc</kbd>
+              <span>to close</span>
             </div>
           </div>
         )}

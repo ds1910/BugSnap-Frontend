@@ -1,10 +1,16 @@
 import React, { useState, useEffect, useRef } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import StatusToggle from "../UI/StatusToggle";
 import PriorityBadge from "../UI/PriorityBadge";
 import AssignBugBadge from "../UI/AssignBugBadge";
 import CalendarDropdown from "../UI/CalendarDropdown";
-import Comments from "./Comments"; // <-- use your actual path here
+import FileUpload from "../UI/FileUpload";
+import FileList from "../UI/FileList";
+import BugAttachment from "../UI/BugAttachment";
+import BugAttachmentsList from "../UI/BugAttachmentsList";
+import FileUploader from "../UI/FileUploader";
+import Comments from "./Comments";
+import LoadingScreen from "../UI/LoadingScreen";
 import axios from "axios";
 const backendUrl = import.meta.env.VITE_BACKEND_URL;
 
@@ -44,9 +50,6 @@ const BugDetails = ({ onClose }) => {
   const [tagError, setTagError] = useState("");
   const [isFocused, setIsFocused] = useState(false);
   const [wordCount, setWordCount] = useState(0);
-  const [selectedBug, setSelectedBug] = useState(
-    JSON.parse(localStorage.getItem("selectedBug"))
-  );
 
   // 🔹 Image preview modal state is indexed over *imageAttachments* only
   const [previewImageIndex, setPreviewImageIndex] = useState(null);
@@ -71,8 +74,16 @@ const BugDetails = ({ onClose }) => {
   const titleInputRef = useRef(null);
   const [titleDraft, setTitleDraft] = useState("");
 
+  // Update state tracking
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [lastSavedBug, setLastSavedBug] = useState(null);
+  const updateTimeoutRef = useRef(null);
+
   // Theme state (kept in selectedBug.theme)
   const [themeChoice, setThemeChoice] = useState("");
+
+  // Attachments refresh trigger
+  const [attachmentsRefreshTrigger, setAttachmentsRefreshTrigger] = useState(0);
 
   // 🔹 Quill toolbar config (attachments removed)
   const quillModules = {
@@ -90,6 +101,22 @@ const BugDetails = ({ onClose }) => {
     const text = div.textContent?.trim() || "";
     if (!text) return 0;
     return text.split(/\s+/).filter(Boolean).length;
+  };
+
+  // 🔹 Handle file upload completion
+  const handleFileUploaded = (uploadedFile) => {
+    // console.log("File uploaded:", uploadedFile);
+    
+    // Trigger refresh of attachments list
+    setAttachmentsRefreshTrigger(prev => prev + 1);
+  };
+
+  // 🔹 Handle file deletion
+  const handleFileDeleted = (fileId) => {
+    // console.log("File deleted:", fileId);
+    
+    // Trigger refresh of attachments list
+    setAttachmentsRefreshTrigger(prev => prev + 1);
   };
 
   // -----------------------------
@@ -232,83 +259,318 @@ const BugDetails = ({ onClose }) => {
     return () => document.head.removeChild(style);
   }, []);
 
-  // clear upload intervals on unmount
+  // clear upload intervals on unmount + cleanup update timeout
   useEffect(() => {
     return () => {
+      // Cleanup intervals
       Object.values(uploadIntervalsRef.current).forEach((i) =>
         clearInterval(i)
       );
       uploadIntervalsRef.current = {};
+      
+      // Clear any pending update timeout
+      if (updateTimeoutRef.current) {
+        clearTimeout(updateTimeoutRef.current);
+      }
     };
   }, []);
 
-  // 🔹 Load bug from localStorage
+  // 🔹 Load bug from localStorage with better error handling
   useEffect(() => {
-    const storedBug = JSON.parse(localStorage.getItem("selectedBug"));
-    if (storedBug) {
+    let storedBug = null;
+    let hasValidData = false;
+    
+    try {
+      const stored = localStorage.getItem("selectedBug");
+      // Check if stored is null, undefined, or the string "undefined"
+      if (stored && stored !== "undefined" && stored !== "null") {
+        storedBug = JSON.parse(stored);
+        if (storedBug && storedBug._id && storedBug.title) {
+          hasValidData = true;
+        }
+      } else if (stored === "undefined" || stored === "null") {
+        // Clean up corrupted data
+        console.warn("Cleaning up corrupted localStorage data:", stored);
+        localStorage.removeItem("selectedBug");
+      }
+    } catch (error) {
+      console.warn("Failed to parse selectedBug from localStorage:", error);
+      // Clear the corrupted data
+      localStorage.removeItem("selectedBug");
+    }
+    
+    if (hasValidData && storedBug) {
+      // Load existing bug data
       setBug(storedBug);
-      // console.log("bug: ");
-      // console.log(storedBug);
+      setLastSavedBug(storedBug); // Initialize lastSavedBug to prevent immediate API call
       setTags(storedBug.tags || []);
       setDescription(storedBug.description || "");
 
-      if (storedBug?.createdAt) {
-        // console.log("Raw createdAt:", storedBug.createdAt);
-        const date = new Date(storedBug.createdAt);
+      if (storedBug?.startDate) {
+        const date = new Date(storedBug.startDate);
         const day = String(date.getUTCDate()).padStart(2, "0");
         const month = String(date.getUTCMonth() + 1).padStart(2, "0");
         const year = date.getUTCFullYear();
         const formatted = `${day}/${month}/${year}`;
-        // console.log(formatted);
         setStartDate(formatted);
       }
 
       if (storedBug?.dueDate) {
         const due = new Date(storedBug.dueDate);
-        setDueDate(due.toLocaleDateString("en-GB")); // dd/mm/yyyy for UI
+        const dueDayFormatted = due.toLocaleDateString("en-GB"); // dd/mm/yyyy for UI
+        setDueDate(dueDayFormatted);
       }
-      //  console.log(storedBug);
+      
       setWordCount(messageWordCount(storedBug.description || ""));
       setTitleDraft(storedBug.title || "");
       setThemeChoice(storedBug.theme || "");
+      
+      // console.log("Loaded existing bug:", storedBug._id, storedBug.title);
+    } else {
+      // No valid data found - create a new bug template only if needed
+      // console.log("No valid bug data found, creating new bug template");
+      
+      // Get team info for new bug
+      let teamId = null;
+      try {
+        const activeTeamStored = localStorage.getItem('activeTeam');
+        if (activeTeamStored) {
+          const activeTeam = JSON.parse(activeTeamStored);
+          teamId = activeTeam?._id;
+        }
+      } catch (e) {
+        console.warn("Could not get active team:", e);
+      }
+      
+      const newBug = {
+        _id: `temp-${Date.now()}`,
+        title: "New Bug Report",
+        description: "",
+        status: "OPEN",
+        priority: "Medium", 
+        tags: [],
+        attachments: [],
+        assignedName: [],
+        createdAt: new Date().toISOString(),
+        dueDate: null,
+        teamId: teamId
+      };
+      
+      setBug(newBug);
+      setLastSavedBug(null); // Don't set lastSavedBug for new bugs
+      setTags([]);
+      setDescription("");
+      setTitleDraft("New Bug Report");
+      setThemeChoice("");
+      
+      // Set current date as start date
+      const today = new Date();
+      const day = String(today.getDate()).padStart(2, "0");
+      const month = String(today.getMonth() + 1).padStart(2, "0");
+      const year = today.getFullYear();
+      setStartDate(`${day}/${month}/${year}`);
+      
+      // console.log("Created new bug template with ID:", newBug._id);
     }
   }, []);
 
-// Save bug to backend after 1s of inactivity
+// Save bug to backend after 1s of inactivity with deduplication and instant persistence
 useEffect(() => {
   if (!bug?._id) return;
 
-  const timeout = setTimeout(async () => {
-    try {
-      const response = await axios.patch(
-        `${backendUrl}/bug/manage`,
-        { bugId: bug._id, updates: bug },
-        { withCredentials: true }
-      );
-      localStorage.setItem("selectedBug", JSON.stringify(response.data.bug));
-    } catch (err) {
-      console.error("Failed to update bug:", err);
+  // Always save to localStorage immediately for data persistence
+  try {
+    if (bug && bug._id && bug.title) {
+      localStorage.setItem("selectedBug", JSON.stringify(bug));
     }
-  }, 1000); // 1 second debounce
+  } catch (e) {
+    console.warn("Failed to save bug to localStorage:", e);
+  }
 
-  return () => clearTimeout(timeout);
-}, [bug]);
+  // Skip API calls during active updates
+  if (isUpdating) return;
+
+  // Skip saving if bug has temp ID - will be handled separately
+  const isTempBug = String(bug._id).startsWith('temp-');
+  
+  // Check if bug actually changed (deep comparison of relevant fields)
+  const currentBugForComparison = {
+    title: bug.title,
+    description: bug.description,
+    status: bug.status,
+    priority: bug.priority,
+    tags: bug.tags,
+    assignedName: bug.assignedName,
+    startDate: bug.startDate,
+    dueDate: bug.dueDate,
+    createdAt: bug.createdAt
+  };
+
+  const lastBugForComparison = lastSavedBug ? {
+    title: lastSavedBug.title,
+    description: lastSavedBug.description,
+    status: lastSavedBug.status,
+    priority: lastSavedBug.priority,
+    tags: lastSavedBug.tags,
+    assignedName: lastSavedBug.assignedName,
+    startDate: lastSavedBug.startDate,
+    dueDate: lastSavedBug.dueDate,
+    createdAt: lastSavedBug.createdAt
+  } : null;
+
+  // Skip API call if data hasn't actually changed
+  if (lastBugForComparison && JSON.stringify(currentBugForComparison) === JSON.stringify(lastBugForComparison)) {
+    return;
+  }
+
+  // Clear any pending timeout
+  if (updateTimeoutRef.current) {
+    clearTimeout(updateTimeoutRef.current);
+  }
+
+  updateTimeoutRef.current = setTimeout(async () => {
+    if (isUpdating) return; // Double-check to prevent concurrent updates
+
+    try {
+      setIsUpdating(true);
+
+      // Get the teamId from the bug object or localStorage
+      const teamId = bug.teamId || bug.team || 
+        (() => {
+          try {
+            const stored = localStorage.getItem('activeTeam');
+            if (!stored) return null;
+            const activeTeam = JSON.parse(stored);
+            return activeTeam?._id;
+          } catch {
+            return null;
+          }
+        })();
+      
+      if (!teamId) {
+        console.error('No teamId available for bug update');
+        return;
+      }
+
+      // Transform status to lowercase before sending to backend
+      const bugUpdatePayload = {
+        ...bug,
+        status: bug.status ? bug.status.toLowerCase() : bug.status,
+        teamId: teamId // Ensure teamId is included
+      };
+
+      let response;
+      
+      if (isTempBug) {
+        // Create new bug for temp IDs
+        // console.log('Creating new bug...');
+        response = await axios.post(
+          `${backendUrl}/bug?teamId=${teamId}`,
+          bugUpdatePayload,
+          { withCredentials: true }
+        );
+      } else {
+        // Update existing bug
+        console.log('Updating existing bug with payload:', bugUpdatePayload);
+        response = await axios.patch(
+          `${backendUrl}/bug/manage/${bug._id}?teamId=${teamId}`,
+          bugUpdatePayload,
+          { withCredentials: true }
+        );
+      }
+
+      // Update component state with the response
+      const updatedBug = response.data.bug;
+      
+      // Log the response for assignment debugging
+      console.log("Backend response - Updated bug:", updatedBug);
+      console.log("Updated assignedName:", updatedBug.assignedName);
+      
+      // Sync all state with backend response
+      setBug(updatedBug);
+      setLastSavedBug(updatedBug);
+      
+      // Update localStorage with fresh data
+      localStorage.setItem("selectedBug", JSON.stringify(updatedBug));
+      
+      // Update local state variables to match backend
+      setTags(updatedBug.tags || []);
+      setDescription(updatedBug.description || "");
+      setTitleDraft(updatedBug.title || "");
+      
+      // Update date fields properly
+      if (updatedBug?.startDate) {
+        const date = new Date(updatedBug.startDate);
+        const day = String(date.getUTCDate()).padStart(2, "0");
+        const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+        const year = date.getUTCFullYear();
+        const formatted = `${day}/${month}/${year}`;
+        setStartDate(formatted);
+      }
+      
+      if (updatedBug?.dueDate) {
+        const due = new Date(updatedBug.dueDate);
+        const dueDayFormatted = due.toLocaleDateString("en-GB");
+        setDueDate(dueDayFormatted);
+      }
+      
+      console.log("Bug saved successfully:", updatedBug._id, updatedBug.status);
+      console.log("Assignment successfully updated:", updatedBug.assignedName);
+    } catch (err) {
+      console.error("Failed to save bug:", err);
+      console.error("Error details:", err.response?.data);
+      console.error("Error status:", err.response?.status);
+      console.error("Full error object:", err);
+      
+      // Show user-friendly error message
+      const errorMessage = err.response?.data?.message || "Failed to save changes. Please try again.";
+      console.error("Save error details:", errorMessage);
+      
+      // Don't revert state - keep user changes but attempt to save again later
+      // console.log("Keeping current changes despite save error");
+      
+      // TODO: Show user notification about error
+      // For now, just log it - you can add a toast notification here
+    } finally {
+      setIsUpdating(false);
+    }
+  }, 800); // Reduced debounce to 0.8 seconds for faster saves
+
+  return () => {
+    if (updateTimeoutRef.current) {
+      clearTimeout(updateTimeoutRef.current);
+    }
+  };
+}, [bug, isUpdating]);
 
 
 
-  // 🔹 Update bug state + persist
+  // 🔹 Update bug state + persist with better synchronization
   // Accept either an object of fields OR a function(prevBug) => newBug
   const updateBug = (updatedFields) => {
     setBug((prev) => {
+      if (!prev) return prev; // Guard against null/undefined
+      
       const updatedBug =
         typeof updatedFields === "function"
-          ? updatedFields(prev || {})
-          : { ...(prev || {}), ...updatedFields };
-      try {
-        localStorage.setItem("selectedBug", JSON.stringify(updatedBug));
-      } catch (e) {
-        // ignore storage errors
+          ? updatedFields(prev)
+          : { ...prev, ...updatedFields };
+      
+      // Ensure critical fields are preserved
+      if (!updatedBug._id || !updatedBug.title) {
+        console.warn("Critical bug fields missing, preserving original");
+        return prev;
       }
+      
+      try {
+        // Only save to localStorage if bug has valid structure
+        if (updatedBug && updatedBug._id && updatedBug.title) {
+          localStorage.setItem("selectedBug", JSON.stringify(updatedBug));
+        }
+      } catch (e) {
+        console.warn("Failed to save bug to localStorage:", e);
+      }
+      
       return updatedBug;
     });
   };
@@ -329,6 +591,10 @@ useEffect(() => {
     const newTitle = (titleDraft || "").trim();
     setIsEditingTitle(false);
     updateBug((p) => ({ ...(p || {}), title: newTitle }));
+    
+    // Force immediate localStorage save for title
+    const updatedBug = { ...bug, title: newTitle };
+    localStorage.setItem("selectedBug", JSON.stringify(updatedBug));
   };
 
   // theme change handler
@@ -357,6 +623,10 @@ useEffect(() => {
       updateBug((prev) => ({ ...prev, tags: newTags }));
       e.target.value = "";
       setTagError("");
+      
+      // Force immediate localStorage save for tags
+      const updatedBug = { ...bug, tags: newTags };
+      localStorage.setItem("selectedBug", JSON.stringify(updatedBug));
     }
   };
 
@@ -365,6 +635,10 @@ useEffect(() => {
     const newTags = tags.filter((t) => t !== tagToRemove);
     setTags(newTags);
     updateBug((prev) => ({ ...prev, tags: newTags }));
+    
+    // Force immediate localStorage save for tags
+    const updatedBug = { ...bug, tags: newTags };
+    localStorage.setItem("selectedBug", JSON.stringify(updatedBug));
   };
 
   // 🔹 Mobile vibration + sound on critical (near 1000)
@@ -610,7 +884,17 @@ useEffect(() => {
     };
   }, [bug, leftPanelRef.current]);
 
-  if (!bug) return null;
+  // Only show loading state briefly, don't block the UI
+  if (!bug) {
+    return (
+      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
+        <div className="bg-gray-800 p-6 rounded-lg shadow-lg text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-2 border-indigo-500 border-t-transparent mx-auto mb-4"></div>
+          <div className="text-white text-lg">Loading bug details...</div>
+        </div>
+      </div>
+    );
+  }
 
   const progressPercent = Math.min((wordCount / 1000) * 100, 100);
   const total = allAttachments.length;
@@ -642,6 +926,7 @@ useEffect(() => {
               <h2 className="text-xl font-semibold text-white animated-label mb-2">
                 Bug Details
               </h2>
+              
               <br />
               {/* Editable title area */}
               <div className="mt-1 editable-title-wrapper items-start">
@@ -725,8 +1010,9 @@ useEffect(() => {
               onClick={onClose}
               className="text-gray-400 hover:text-white p-2 rounded-full hover:bg-gray-800"
               aria-label="Close"
+              title="Close"
             >
-              {/* <X size={22} /> */}
+              <X size={22} />
             </motion.button>
           </div>
 
@@ -749,7 +1035,7 @@ useEffect(() => {
                     whileHover={{ scale: 1.03 }}
                     whileTap={{ scale: 0.97 }}
                     transition={{ duration: 0.12 }}
-                    className="inline-flex ml-2"
+                    className="inline-flex ml-2 items-center gap-2"
                   >
                     <StatusToggle
                       status={bug?.status}
@@ -766,9 +1052,16 @@ useEffect(() => {
                   <div className="relative z-[70]">
                     <AssignBugBadge
                       value={bug?.assignedName || []}
-                      onChange={(val) =>
-                        updateBug((p) => ({ ...(p || {}), assignedName: val }))
-                      }
+                      onChange={(val) => {
+                        console.log("=== BugDetail Assignment Update ===");
+                        console.log("Current bug.assignedName:", bug?.assignedName);
+                        console.log("New assignedName value:", val);
+                        console.log("Value details:", val.map(v => ({ name: v.name, email: v.email, hasEmail: !!v.email })));
+                        console.log("===================================");
+                        updateBug((p) => ({ ...(p || {}), assignedName: val }));
+                      }}
+                      compact={false}
+                      key={`assign-badge-${bug?._id}-${JSON.stringify(bug?.assignedName)}`} // Force re-render when data changes
                     />
                   </div>
                 </div>
@@ -791,7 +1084,10 @@ useEffect(() => {
                         value={startDate}
                         onChange={(val) => {
                           setStartDate(val);
-                          updateBug((p) => ({ ...(p || {}), startDate: val }));
+                          // Convert to ISO format for backend storage
+                          const dateObj = new Date(val);
+                          const isoDate = dateObj.toISOString();
+                          updateBug((p) => ({ ...(p || {}), startDate: isoDate }));
                         }}
                         placeholder="Start Date"
                         dropdownClassName="absolute left-0 mt-2 w-48 bg-[#2a2a2a] rounded-xl shadow-lg z-50"
@@ -812,7 +1108,10 @@ useEffect(() => {
                         value={dueDate}
                         onChange={(val) => {
                           setDueDate(val);
-                          updateBug((p) => ({ ...(p || {}), dueDate: val }));
+                          // Convert to ISO format for backend storage
+                          const dateObj = new Date(val);
+                          const isoDate = dateObj.toISOString();
+                          updateBug((p) => ({ ...(p || {}), dueDate: isoDate }));
                         }}
                         placeholder="End Date"
                         dropdownClassName="absolute right-0 mt-2 w-48 bg-[#2a2a2a] rounded-xl shadow-lg z-50"
@@ -931,6 +1230,10 @@ useEffect(() => {
                     setDescription(html);
                     updateBug((p) => ({ ...(p || {}), description: html }));
                     setWordCount(messageWordCount(html));
+                    
+                    // Force immediate localStorage save for description
+                    const updatedBug = { ...bug, description: html };
+                    localStorage.setItem("selectedBug", JSON.stringify(updatedBug));
                   }}
                   modules={quillModules}
                   placeholder="Enter bug description... (use formatting tools above)"
@@ -975,203 +1278,26 @@ useEffect(() => {
           </div>
 
           {/* ===================================== */}
-          {/* 🔹 File Upload (enhanced: simulated upload + reorder + download) */}
+          {/* 🔹 Bug Attachments Section */}
           <div className="mt-6 slide-in">
-            <p className="text-gray-300 text-base font-semibold mb-2">
+            <p className="text-gray-300 text-base font-semibold mb-4">
               Attachments
             </p>
-            {/* Change to #1a1a1a for file upload div box */}
-            <div
-              onDrop={(e) => {
-                e.preventDefault();
-                handleFileUpload(e.dataTransfer.files);
-              }}
-              onDragOver={(e) => e.preventDefault()}
-              className="flex flex-col items-center justify-center w-full p-6 border-2 border-dashed border-gray-600 rounded-xl text-gray-400 hover:border-indigo-500 hover:text-indigo-400 transition cursor-pointer"
-            >
-              <UploadCloud className="w-6 h-6 mb-2" />
-              <p className="text-sm">
-                Drag & drop files here, or click to upload (you can select
-                multiple files)
-              </p>
-
-              <input
-                type="file"
-                multiple
-                className="hidden"
-                id="fileUploadInput"
-                onChange={(e) => {
-                  handleFileUpload(e.target.files);
-                  // allow same file selection again
-                  e.target.value = null;
-                }}
-              />
-
-              <label
-                htmlFor="fileUploadInput"
-                className="mt-2 px-3 py-1 bg-indigo-600 text-white text-xs rounded-lg cursor-pointer hover:bg-indigo-700 transition"
-              >
-                Browse Files
-              </label>
-            </div>
+            
+            {/* File Upload Component */}
+            <FileUploader
+              bugId={bug?._id}
+              onFileUploaded={handleFileUploaded}
+              className="mb-6"
+            />
+            
+            {/* File List Component */}
+            <BugAttachmentsList
+              bugId={bug?._id}
+              refreshTrigger={attachmentsRefreshTrigger}
+              className="mt-4"
+            />
           </div>
-
-          {/* Uploading progress (simulated) */}
-          {uploadingFiles.length > 0 && (
-            <div className="mt-4 space-y-3 slide-in">
-              {uploadingFiles.map((f) => (
-                // Change to #1a1a1a for uploading file box
-                <div
-                  key={f.id}
-                  className="bg-[#1a1a1a] p-3 rounded-lg shadow relative"
-                >
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <p
-                        className="text-xs text-gray-300 truncate"
-                        title={f.file.name}
-                      >
-                        {f.file.name}
-                      </p>
-                      <p className="text-[10px] text-gray-500">
-                        {formatSize(f.file.size)}
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => cancelUpload(f.id)}
-                      className="text-gray-400 hover:text-red-500 transition ml-4"
-                      title="Cancel upload"
-                    >
-                      <X size={14} />
-                    </button>
-                  </div>
-
-                  {/* Progress Bar */}
-                  <div className="w-full bg-[#0f0f0f] rounded-full h-2 mt-3 overflow-hidden">
-                    <div
-                      className="progress-bar fast"
-                      style={{ width: `${f.progress}%`, height: 8 }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* 🔹 File Previews (reorderable + download) */}
-          <DragDropContext onDragEnd={handleDragEnd}>
-            <Droppable droppableId="attachments" direction="horizontal">
-              {(provided) => (
-                <div
-                  className="mt-4 flex flex-wrap gap-4"
-                  {...provided.droppableProps}
-                  ref={provided.innerRef}
-                >
-                  {/* visuallyOrderedIndices is newest-first visual order */}
-                  {visuallyOrderedIndices.map((origIdx, visualIdx) => {
-                    const file = allAttachments[origIdx];
-                    if (!file) return null;
-
-                    const isImage = file.type?.startsWith("image/");
-                    const ext = (
-                      file.name?.split(".").pop() || ""
-                    ).toLowerCase();
-
-                    let icon = <FileIcon className="w-10 h-10" />;
-                    let colorClass = "bg-gray-700 text-gray-200";
-
-                    if (ext === "pdf") {
-                      icon = <FileArchive className="w-10 h-10" />;
-                      colorClass = "bg-red-600 text-white";
-                    } else if (["doc", "docx"].includes(ext)) {
-                      icon = <DescriptionIcon className="w-10 h-10" />;
-                      colorClass = "bg-blue-600 text-white";
-                    } else if (["txt", "md"].includes(ext)) {
-                      icon = <FileType className="w-10 h-10" />;
-                      colorClass = "bg-gray-600 text-white";
-                    }
-
-                    // draggable index must be visualIdx (position in rendered list)
-                    return (
-                      <Draggable
-                        key={file.id || origIdx}
-                        draggableId={String(file.id || origIdx)}
-                        index={visualIdx}
-                      >
-                        {(prov) => (
-                          <div
-                            ref={prov.innerRef}
-                            {...prov.draggableProps}
-                            {...prov.dragHandleProps}
-                            className="relative group rounded-xl overflow-hidden file-tile-default"
-                          >
-                            {isImage ? (
-                              <img
-                                src={file.url}
-                                alt={file.name}
-                                onClick={() => {
-                                  // map original index -> image index for modal
-                                  const imgIndex = imageIndexMap.get(origIdx);
-                                  if (imgIndex !== undefined)
-                                    setPreviewImageIndex(imgIndex);
-                                }}
-                                className="w-40 h-28 object-cover rounded-xl cursor-pointer hover:scale-105 transition-all shadow"
-                              />
-                            ) : (
-                              <div
-                                className={`flex flex-col items-center justify-center h-28 rounded-xl p-3 shadow cursor-pointer hover:ring-2 hover:ring-indigo-500 transition-all ${colorClass}`}
-                                onClick={() => window.open(file.url, "_blank")}
-                              >
-                                {icon}
-                                <p className="truncate text-xs mt-1 w-full text-center px-1">
-                                  {file.name}
-                                </p>
-                                <span className="text-[10px] opacity-70">
-                                  {formatSize(file.size)}
-                                </span>
-                              </div>
-                            )}
-
-                            {/* Remove Button */}
-                            <button
-                              onClick={() => removeAttachment(origIdx)}
-                              className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-1 text-xs hover:bg-red-600 opacity-0 group-hover:opacity-100 transition"
-                              title="Remove"
-                            >
-                              <X size={12} />
-                            </button>
-
-                            {/* Download Button (non-image & image both) */}
-                            <a
-                              href={file.url}
-                              download={file.name}
-                              className="absolute bottom-1 right-1 bg-black/60 text-white rounded-full p-1 text-xs hover:bg-indigo-500 opacity-0 group-hover:opacity-100 transition"
-                              title="Download"
-                            >
-                              <Download size={12} />
-                            </a>
-                          </div>
-                        )}
-                      </Draggable>
-                    );
-                  })}
-
-                  {/* "See more" tile when collapsed */}
-                  {!showAll && remainingCount > 0 && (
-                    <div
-                      className="w-40 h-28 rounded-xl p-3 flex items-center justify-center cursor-pointer bg-[#111] text-sm text-gray-300 shadow hover:bg-[#1b1b1b] transition"
-                      onClick={() => setShowAll(true)}
-                      title={`Show ${remainingCount} more`}
-                    >
-                      +{remainingCount} more
-                    </div>
-                  )}
-
-                  {provided.placeholder}
-                </div>
-              )}
-            </Droppable>
-          </DragDropContext>
 
           {/* small bottom padding so content doesn't hide under the progress bar */}
           <div style={{ height: 20 }} />
@@ -1254,6 +1380,12 @@ useEffect(() => {
         ref={audioRef}
         src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg"
         preload="auto"
+      />
+
+      {/* Loading Screen */}
+      <LoadingScreen 
+        message="Saving changes..." 
+        isVisible={isUpdating} 
       />
     </div>
   );

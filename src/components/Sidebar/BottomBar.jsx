@@ -10,7 +10,7 @@ const BottomBar = () => {
     axios
       .post("http://localhost:8019/api/logout", {}, { withCredentials: true })
       .then(() => {
-        // Clear auth info from local storage
+        // Clear user info from local storage (but not tokens - they're in HTTP-only cookies)
         localStorage.removeItem("isAuth");
         localStorage.removeItem("userInfo");
 

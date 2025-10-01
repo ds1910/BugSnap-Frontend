@@ -2,6 +2,10 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import StarsBackground from "./StarsBackground";
+import axios from "axios";
+
+// Vite env var (fallback to localhost for dev if not set)
+const backendUrl = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000";
 
 const ForgotPassword = () => {
   const navigate = useNavigate();
@@ -17,7 +21,7 @@ const ForgotPassword = () => {
     setCooldown(seconds);
   };
 
-  // Effect to run countdown
+  // Countdown effect
   useEffect(() => {
     if (cooldown <= 0) {
       if (intervalRef.current) {
@@ -41,6 +45,7 @@ const ForgotPassword = () => {
       }, 1000);
     }
 
+    // cleanup when cooldown changes or component unmounts
     return () => {
       if (intervalRef.current && cooldown === 0) {
         clearInterval(intervalRef.current);
@@ -49,14 +54,21 @@ const ForgotPassword = () => {
     };
   }, [cooldown]);
 
+  // ensure interval cleared on unmount
   useEffect(() => {
     return () => {
-      // cleanup on unmount
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
+        intervalRef.current = null;
       }
     };
   }, []);
+
+  // Basic email validation
+  const isValidEmail = (value) => {
+    // simple RFC-ish check (good for UI validation)
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+  };
 
   const handleSendEmail = async (e) => {
     e.preventDefault();
@@ -66,34 +78,44 @@ const ForgotPassword = () => {
       return;
     }
 
-    if (!email.trim()) {
+    const trimmed = email.trim();
+    if (!trimmed) {
       alert("Please enter your email address.");
+      return;
+    }
+    if (!isValidEmail(trimmed)) {
+      alert("Please enter a valid email address.");
       return;
     }
 
     setLoading(true);
     try {
-      // POST to your backend route that sends the reset email.
-      // Change the URL to match your backend endpoint if needed.
-      const res = await fetch("http://localhost:8019/auth/send-otp", {
-        method: "POST",
+      console.log("Sending password reset request for:", trimmed);
+      // POST to backend route that sends the reset email.
+      // Axios automatically stringifies data and sets Content-Type.
+      const res = await axios.post(`${backendUrl}/user/forgotPassword`, { email: trimmed }, {
+        // optional config
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+        timeout: 15000, // 15s timeout (optional)
       });
 
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || "Failed to send reset email");
+      // Use response from backend. Expecting something like { message: "Reset email sent" }
+      if (res.status >= 200 && res.status < 300) {
+        alert(res.data?.message || "Reset email sent. Check your inbox (and spam).");
+        // prevent immediate re-send
+        startCooldown(60);
+        // Optionally navigate to another page:
+        // navigate("/verify-otp", { state: { email: trimmed } });
+      } else {
+        // fallback for unexpected statuses
+        alert(res.data?.error || "Unexpected response. Please try again.");
       }
-
-      alert("Reset email sent. Check your inbox (and spam).");
-      // start 60s cooldown to prevent re-sending immediately
-      startCooldown(60);
-      // optionally navigate to a verification page:
-      // navigate("/verify-otp", { state: { email } });
     } catch (err) {
-      console.error(err);
-      alert("Could not send reset email. Please try again later.");
+      // Axios error handling — provide helpful message
+      const serverMessage =
+        err.response?.data?.error || err.response?.data?.message || err.message;
+      console.error("Forgot password error:", err);
+      alert(serverMessage || "Could not send reset email. Please try again later.");
     } finally {
       setLoading(false);
     }
@@ -134,7 +156,7 @@ const ForgotPassword = () => {
         </p>
 
         {/* Form */}
-        <form onSubmit={handleSendEmail} className="space-y-4">
+        <form onSubmit={handleSendEmail} className="space-y-4" noValidate>
           <input
             type="email"
             value={email}
@@ -155,14 +177,11 @@ const ForgotPassword = () => {
             type="submit"
             disabled={loading || cooldown > 0}
             aria-disabled={loading || cooldown > 0}
-            className={`
-              w-full mt-2 py-3 rounded-lg
+            className={`w-full mt-2 py-3 rounded-lg
               ${cooldown > 0 ? "bg-gray-600 text-gray-200" : "bg-white text-black"}
               font-medium
-              hover:${cooldown > 0 ? "bg-gray-600" : "bg-gray-200"}
               transition-colors duration-200
-              disabled:opacity-60 disabled:cursor-not-allowed
-            `}
+              disabled:opacity-60 disabled:cursor-not-allowed`}
           >
             {loading ? "Sending…" : cooldown > 0 ? `Resend in ${formatTime(cooldown)}` : "Send Email"}
           </button>
@@ -184,7 +203,8 @@ const ForgotPassword = () => {
         {/* Note */}
         <div className="mt-6 text-center text-sm text-gray-500">
           <p>
-            If you don't receive the email within a few minutes, check your spam or try again.
+            If you don't receive the email within a few minutes, check your spam
+            or try again.
           </p>
         </div>
       </div>

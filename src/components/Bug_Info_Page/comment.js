@@ -3,7 +3,7 @@ import axios from "axios";
 const backendUrl = import.meta.env.VITE_BACKEND_URL || "";
 
 /**
- * Safely read activeTeam id from localStorage.
+ * Get active team id from localStorage.
  * Returns a string id or null.
  */
 const getTeamId = () => {
@@ -28,7 +28,7 @@ const commentApi = {
     try {
       const response = await axios.get(`${backendUrl}/comment/all`, {
         params: { bugId },
-        withCredentials: true,
+        withCredentials: true, // Use cookies for authentication
       });
       return response?.data?.comments ?? [];
     } catch (err) {
@@ -112,18 +112,25 @@ const commentApi = {
   // =============================
   // Get replies for a comment
   // =============================
-  getReplyToComment: async ({ parentId, bugId }) => {
+  getRepliesForComment: async ({ parentId, bugId }) => {
     try {
+      console.log("Getting replies for:", { parentId, bugId });
       const response = await axios.get(`${backendUrl}/comment/reply`, {
         params: { parentId, bugId },
         withCredentials: true,
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+        },
       });
 
+      console.log("Reply response data:", response?.data);
       const data = response?.data;
-      return data?.reply ?? data?.replies ?? data ?? null;
+      
+      // Backend returns both 'reply' and 'replies' properties with the same array
+      const replies = data?.replies || data?.reply || [];
+      return { success: true, replies };
     } catch (err) {
-      console.error("commentApi.getReplyToComment error:", err);
+      console.error("commentApi.getRepliesForComment error:", err);
       throw err;
     }
   },

@@ -197,8 +197,8 @@ const CalendarDropdown = ({
 
         {/* Weekdays */}
         <div className="grid grid-cols-7 text-sm text-gray-400 mb-3">
-          {["S", "M", "T", "W", "T", "F", "S"].map((d) => (
-            <div key={d} className="flex justify-center font-medium">
+          {["S", "M", "T", "W", "T", "F", "S"].map((d, index) => (
+            <div key={`weekday-${index}-${d}`} className="flex justify-center font-medium">
               {d}
             </div>
           ))}

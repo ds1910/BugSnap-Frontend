@@ -6,6 +6,7 @@ import { FaGithub } from "react-icons/fa";
 import StarsBackground from "./StarsBackground";
 import GoogleLogin from "./GoogleLogin";
 import GitHubLogin from "./GitHubLogin";
+import SEO from "./SEO/SEO";
 import axios from "axios";
 
 const backendUrl = import.meta.env.VITE_BACKEND_URL;
@@ -35,6 +36,42 @@ const Login = () => {
 
       if (res.status === 200) {
         const encrypted = res.data?.encrypted;
+        
+        // Authentication is now handled entirely by HTTP-only cookies
+        // No need to store tokens in localStorage
+        
+        // Check if there's a pending invitation to process
+        const pendingToken = sessionStorage.getItem('pendingInviteToken');
+        const pendingInviter = sessionStorage.getItem('pendingInviter');
+        
+        if (pendingToken) {
+          // Process the pending invitation
+          try {
+            await axios.patch(
+              `${backendUrl}/people/add`,
+              { token: pendingToken },
+              { withCredentials: true }
+            );
+            
+            // Clear the pending invitation
+            sessionStorage.removeItem('pendingInviteToken');
+            sessionStorage.removeItem('pendingInviter');
+            
+            // Navigate to dashboard with success message
+            if (!encrypted) {
+              navigate("/dashboard?inviteAccepted=true");
+              return;
+            }
+            navigate(`/dashboard?data=${encodeURIComponent(encrypted)}&inviteAccepted=true`);
+            return;
+            
+          } catch (inviteErr) {
+            console.error("Failed to process pending invitation:", inviteErr);
+            // Continue with normal login flow if invite processing fails
+          }
+        }
+        
+        // Normal login flow
         if (!encrypted) {
           console.warn("No encrypted payload returned from server.", res.data);
           navigate("/dashboard");
@@ -62,7 +99,16 @@ const Login = () => {
   };
 
   return (
-    <div className="relative min-h-screen flex items-center justify-center bg-black px-4 overflow-hidden">
+    <>
+      <SEO 
+        title="Login - bugSnap | Access Your Bug Tracking Dashboard"
+        description="Sign in to your bugSnap account to access your bug tracking dashboard, manage issues, and collaborate with your team. Secure login with email or social authentication."
+        keywords="login, sign in, bugSnap, bug tracker, dashboard access, team collaboration"
+        url="/login"
+        type="website"
+      />
+      
+      <div className="relative min-h-screen flex items-center justify-center bg-black px-4 overflow-hidden">
       <StarsBackground />
 
       <div
@@ -85,7 +131,7 @@ const Login = () => {
                        hover:ring-2 hover:ring-white transition duration-200 font-inter"
           >
             <FcGoogle size={20} />
-            <GoogleLogin />
+            <GoogleLogin mode="login" />
           </div>
 
           <div
@@ -94,7 +140,7 @@ const Login = () => {
                        hover:ring-2 hover:ring-white transition duration-200 font-inter"
           >
             <FaGithub size={20} />
-            <GitHubLogin />
+            <GitHubLogin mode="login" />
           </div>
         </div>
 
@@ -160,7 +206,8 @@ const Login = () => {
           </p>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 };
 

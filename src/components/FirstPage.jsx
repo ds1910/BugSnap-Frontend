@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { marked } from "https://cdn.jsdelivr.net/npm/marked@12.0.2/lib/marked.esm.js";
+import SEO from "./SEO/SEO";
 
 // This is a complete, self-contained single-file React application for the BugSnap front page.
 // It is designed to be a portfolio-quality project for a solo developer, featuring a professional
@@ -619,10 +620,48 @@ useEffect(() => {
     .map((ch, i) => (ch === " " ? "\u00A0" : ch));
 
   return (
-    // Main container with dynamic class for light/dark mode and a global gradient background
-    <div
-      className={`min-h-screen font-sans antialiased hero-bg-anim light-theme`}
-    >
+    <>
+      {/* SEO Meta Tags */}
+      <SEO 
+        title="bugSnap - Intelligent Bug Tracking & Team Collaboration Platform"
+        description="Streamline your development workflow with bugSnap - the modern bug tracking platform designed for developers and teams. Track issues, collaborate seamlessly, and ship better software faster."
+        keywords="bug tracking, issue tracker, team collaboration, software development, project management, bugSnap, developer tools, agile development, issue management"
+        type="website"
+        image="/og-image.png"
+        schemaData={{
+          "@context": "https://schema.org",
+          "@type": "SoftwareApplication",
+          "name": "bugSnap",
+          "description": "Intelligent Bug Tracking & Team Collaboration Platform for modern development teams",
+          "url": "https://bugsnap.vercel.app",
+          "applicationCategory": "DeveloperApplication",
+          "operatingSystem": "Web Browser",
+          "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "USD"
+          },
+          "creator": {
+            "@type": "Organization",
+            "name": "bugSnap Team",
+            "url": "https://bugsnap.vercel.app"
+          },
+          "featureList": [
+            "Real-time Bug Tracking",
+            "Team Collaboration",
+            "Issue Management",
+            "Project Management",
+            "Advanced Filtering",
+            "Mobile Responsive",
+            "Email Notifications"
+          ]
+        }}
+      />
+      
+      {/* Main container with dynamic class for light/dark mode and a global gradient background */}
+      <div
+        className={`min-h-screen font-sans antialiased hero-bg-anim light-theme`}
+      >
       <style>{styles}</style>
 
       {/* Header Component */}
@@ -656,7 +695,7 @@ useEffect(() => {
           <div className="flex items-center space-x-4">
             <button
               className="px-5 py-2 text-white font-medium rounded-lg btn-gradient transition-all"
-              // **CHANGED**: use React Router navigation to /signup
+              // **CHANGED**: usae React Router navigation to /signup
               onClick={() => navigate("/signup")}
             >
               SIGN UP
@@ -904,7 +943,8 @@ useEffect(() => {
           <p>&copy; 2025 bugSnap. All rights reserved.</p>
         </div>
       </footer>
-    </div>
+      </div>
+    </>
   );
 };
 
