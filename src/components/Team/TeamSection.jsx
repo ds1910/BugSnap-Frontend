@@ -72,7 +72,7 @@ const writeLocal = (arr) => {
 };
 
 /* ----------------- TeamSection Component (merged & fixed) ----------------- */
-const TeamSection = () => {
+const TeamSection = ({ allTeams = [], isAuthenticated = false, authChecked = false }) => {
   // initialize teams from localStorage
   const [teams, setTeams] = useState(() => {
     try {
@@ -109,6 +109,12 @@ const TeamSection = () => {
 
   // ---------------- Fetch all teams (sync with localStorage fallback) ----------------
   useEffect(() => {
+    // Only fetch teams if user is authenticated
+    if (!isAuthenticated || !authChecked) {
+      console.log("TeamSection: Skipping team fetch - not authenticated or auth not checked");
+      return;
+    }
+
     const getAllTeams = async () => {
       setIsLoading(true);
       try {
@@ -138,12 +144,12 @@ const TeamSection = () => {
 
     getAllTeams();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [isAuthenticated, authChecked]);
 
   // ---------------- Fetch members when Add Member modal opens ----------------
   useEffect(() => {
     const fetchMembers = async () => {
-      if (showModal) {
+      if (showModal && isAuthenticated && authChecked) {
         setLoadingMembers(true);
         try {
           const response = await axios.get(
@@ -176,7 +182,7 @@ const TeamSection = () => {
     };
     fetchMembers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showModal]);
+  }, [showModal, isAuthenticated, authChecked]);
 
   // ---------- Member Add ----------
   const handleAddMember = (team) => {

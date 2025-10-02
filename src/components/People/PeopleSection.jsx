@@ -57,7 +57,7 @@ const Toast = ({ message, type, onClose }) => {
   );
 };
 
-const PeopleSection = () => {
+const PeopleSection = ({ isAuthenticated = false, authChecked = false }) => {
   const [people, setPeople] = useState([]);
   const [selectedPerson, setSelectedPerson] = useState(null);
   const [search, setSearch] = useState("");
@@ -140,6 +140,14 @@ const PeopleSection = () => {
 
   useEffect(() => {
     console.log("=== PeopleSection useEffect Triggered ===");
+    console.log("Auth status:", { isAuthenticated, authChecked });
+    
+    // Only fetch people if user is authenticated
+    if (!isAuthenticated || !authChecked) {
+      console.log("Skipping people fetch - not authenticated or auth not checked");
+      return;
+    }
+    
     console.log("Component mounted/re-mounted, fetching people...");
     let mounted = true;
 
@@ -155,7 +163,7 @@ const PeopleSection = () => {
       mounted = false;
       console.log("PeopleSection component unmounted");
     };
-  }, []);
+  }, [isAuthenticated, authChecked]);
 
   const handleView = (person) => {
     console.log("person " + person);
