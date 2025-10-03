@@ -17,6 +17,8 @@ const GoogleLogin = () => {
 
 const handleGoogleLogin = () => {
   // Redirect the browser to your backend Google OAuth route
+ // console.log("Redirecting to Google OAuth at:", `${backendUrl}/auth/google`);
+
   window.location.href = `${backendUrl}/auth/google`;
 };
 
