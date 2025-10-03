@@ -1,11 +1,32 @@
 User-agent: *
 Allow: /
-Disallow: /api/
-Disallow: /admin/
-Disallow: /upload/
+
+# Allow crawling of all public pages
+Allow: /login
+Allow: /signup
+Allow: /forgot-password
+Allow: /reset-password
+
+# Disallow crawling of private/admin areas
+Disallow: /dashboard*
+Disallow: /admin*
+Disallow: /api*
+Disallow: /upload*
+Disallow: /_next*
+Disallow: /static*
 
 # Sitemap location
 Sitemap: https://bugsnap.vercel.app/sitemap.xml
 
-# Crawl-delay for all bots
+# Crawl delay (helps prevent server overload)
 Crawl-delay: 1
+
+# Additional directives for specific bots
+User-agent: Googlebot
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+User-agent: Slurp
+Allow: /

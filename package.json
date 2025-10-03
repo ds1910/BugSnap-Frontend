@@ -7,10 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
-    "preview": "vite preview",
-    "seo:generate-sitemap": "node scripts/generate-sitemap.js",
-    "seo:audit": "lighthouse --chrome-flags=\"--headless\" --only-categories=seo,performance,accessibility --output=html --output-path=./lighthouse-report.html",
-    "prebuild": "npm run seo:generate-sitemap"
+    "preview": "vite preview"
   },
   "dependencies": {
     "@fontsource/poppins": "^5.2.6",
