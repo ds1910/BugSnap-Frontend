@@ -14,35 +14,35 @@ export const initWebVitals = () => {
   import('web-vitals').then(({ getCLS, getFID, getFCP, getLCP, getTTFB }) => {
     // Largest Contentful Paint (LCP) - Loading performance
     getLCP((metric) => {
-      console.log('LCP:', metric);
+      // console.log('LCP:', metric);
       sendToAnalytics('LCP', metric);
     });
 
     // First Input Delay (FID) - Interactivity
     getFID((metric) => {
-      console.log('FID:', metric);
+      // console.log('FID:', metric);
       sendToAnalytics('FID', metric);
     });
 
     // Cumulative Layout Shift (CLS) - Visual stability
     getCLS((metric) => {
-      console.log('CLS:', metric);
+      // console.log('CLS:', metric);
       sendToAnalytics('CLS', metric);
     });
 
     // First Contentful Paint (FCP) - Loading
     getFCP((metric) => {
-      console.log('FCP:', metric);
+      // console.log('FCP:', metric);
       sendToAnalytics('FCP', metric);
     });
 
     // Time to First Byte (TTFB) - Server response time
     getTTFB((metric) => {
-      console.log('TTFB:', metric);
+      // console.log('TTFB:', metric);
       sendToAnalytics('TTFB', metric);
     });
   }).catch(err => {
-    console.warn('Web Vitals not available:', err);
+    // console.warn('Web Vitals not available:', err);
   });
 };
 
@@ -60,11 +60,11 @@ const sendToAnalytics = (metricName, metric) => {
 
   // Log to console in development
   if (process.env.NODE_ENV === 'development') {
-    console.group(`📊 ${metricName} Metric`);
-    console.log('Value:', metric.value);
-    console.log('Delta:', metric.delta);
-    console.log('ID:', metric.id);
-    console.log('Rating:', getMetricRating(metricName, metric.value));
+    // console.group(`📊 ${metricName} Metric`);
+    // console.log('Value:', metric.value);
+    // console.log('Delta:', metric.delta);
+    // console.log('ID:', metric.id);
+    // console.log('Rating:', getMetricRating(metricName, metric.value));
     console.groupEnd();
   }
 };
@@ -95,11 +95,11 @@ export const observePerformance = () => {
     // Observe Long Tasks (> 50ms)
     const longTaskObserver = new PerformanceObserver((list) => {
       for (const entry of list.getEntries()) {
-        console.warn('🐌 Long Task detected:', {
-          duration: entry.duration,
-          startTime: entry.startTime,
-          name: entry.name
-        });
+        // console.warn('🐌 Long Task detected:', {
+        //   duration: entry.duration,
+        //   startTime: entry.startTime,
+        //   name: entry.name
+        // });
       }
     });
     longTaskObserver.observe({ entryTypes: ['longtask'] });
@@ -113,7 +113,7 @@ export const observePerformance = () => {
         }
       }
       if (cumulativeScore > 0.1) {
-        console.warn('📐 Layout Shift detected:', cumulativeScore);
+        // console.warn('📐 Layout Shift detected:', cumulativeScore);
       }
     });
     layoutShiftObserver.observe({ entryTypes: ['layout-shift'] });
@@ -122,12 +122,12 @@ export const observePerformance = () => {
     const lcpObserver = new PerformanceObserver((list) => {
       const entries = list.getEntries();
       const lastEntry = entries[entries.length - 1];
-      console.log('🖼️ LCP Element:', lastEntry.element, 'Time:', lastEntry.startTime);
+      // console.log('🖼️ LCP Element:', lastEntry.element, 'Time:', lastEntry.startTime);
     });
     lcpObserver.observe({ entryTypes: ['largest-contentful-paint'] });
 
   } catch (error) {
-    console.warn('Performance observation not supported:', error);
+    // console.warn('Performance observation not supported:', error);
   }
 };
 
@@ -138,12 +138,12 @@ export const monitorResourceLoading = () => {
   window.addEventListener('load', () => {
     const perfData = performance.getEntriesByType('navigation')[0];
     
-    console.group('📈 Page Load Performance');
-    console.log('DNS Lookup:', perfData.domainLookupEnd - perfData.domainLookupStart);
-    console.log('TCP Connection:', perfData.connectEnd - perfData.connectStart);
-    console.log('Server Response:', perfData.responseEnd - perfData.requestStart);
-    console.log('DOM Processing:', perfData.domContentLoadedEventEnd - perfData.responseEnd);
-    console.log('Total Load Time:', perfData.loadEventEnd - perfData.navigationStart);
+    // console.group('📈 Page Load Performance');
+    // console.log('DNS Lookup:', perfData.domainLookupEnd - perfData.domainLookupStart);
+    // console.log('TCP Connection:', perfData.connectEnd - perfData.connectStart);
+    // console.log('Server Response:', perfData.responseEnd - perfData.requestStart);
+    // console.log('DOM Processing:', perfData.domContentLoadedEventEnd - perfData.responseEnd);
+    // console.log('Total Load Time:', perfData.loadEventEnd - perfData.navigationStart);
     console.groupEnd();
 
     // Check for large resources
@@ -151,7 +151,7 @@ export const monitorResourceLoading = () => {
     const largeResources = resources.filter(resource => resource.transferSize > 1000000); // > 1MB
     
     if (largeResources.length > 0) {
-      console.warn('🚨 Large Resources detected (>1MB):', largeResources);
+      // console.warn('🚨 Large Resources detected (>1MB):', largeResources);
     }
   });
 };
@@ -162,11 +162,11 @@ export const monitorMemoryUsage = () => {
 
   const logMemoryUsage = () => {
     const memory = performance.memory;
-    console.log('💾 Memory Usage:', {
-      used: `${Math.round(memory.usedJSHeapSize / 1048576)}MB`,
-      total: `${Math.round(memory.totalJSHeapSize / 1048576)}MB`,
-      limit: `${Math.round(memory.jsHeapSizeLimit / 1048576)}MB`
-    });
+    // console.log('💾 Memory Usage:', {
+    //   used: `${Math.round(memory.usedJSHeapSize / 1048576)}MB`,
+    //   total: `${Math.round(memory.totalJSHeapSize / 1048576)}MB`,
+    //   limit: `${Math.round(memory.jsHeapSizeLimit / 1048576)}MB`
+    // });
   };
 
   // Log memory usage every 30 seconds in development
@@ -186,7 +186,7 @@ export const analyzeBundleSize = () => {
       .then(response => {
         const size = response.headers.get('content-length');
         if (size && parseInt(size) > 500000) { // > 500KB
-          console.warn('📦 Large JS Bundle:', script.src, `${Math.round(size / 1024)}KB`);
+          // console.warn('📦 Large JS Bundle:', script.src, `${Math.round(size / 1024)}KB`);
         }
       })
       .catch(() => {}); // Ignore CORS errors

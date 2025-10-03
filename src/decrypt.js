@@ -48,7 +48,7 @@ export function decrypt(encryptedData) {
     // Parse decrypted JSON string to object and return
     return JSON.parse(decryptedText);
   } catch (error) {
-    console.error("Decryption failed:", error.message);
+    // console.error("Decryption failed:", error.message);
     throw new Error("Failed to decrypt data. Possibly corrupted or invalid.");
   }
 }

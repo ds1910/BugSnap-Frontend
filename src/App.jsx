@@ -10,6 +10,7 @@ import NoPeopleState from "./components/People/NoPeopleState";
 import SearchResults from "./components/Bug/SearchResults";
 import { SearchFilterProvider, useSearchFilter } from "./components/Bug/SearchFilterContext";
 import ToastContainer from "./components/UI/ToastContainer";
+import { EnhancedAIBot } from "./components/Bot";
 import axios from "axios";
 
 const backendUrl = import.meta.env.VITE_BACKEND_URL;
@@ -23,6 +24,8 @@ function AppContent({ userInfo, refreshPeople }) {
 
   const [selectedSection, setSelectedSection] = useState("home");
   const [peopleRefreshKey, setPeopleRefreshKey] = useState(0);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
 
   const [activeTeam, setActiveTeam] = useState(() => {
     const storedTeam = localStorage.getItem("activeTeam");
@@ -52,17 +55,27 @@ function AppContent({ userInfo, refreshPeople }) {
   useEffect(() => {
     const checkAuthStatus = async () => {
       try {
-        console.log('Checking authentication status via cookies...');
+        // console.log('Checking authentication status via cookies...');
+        // console.log('Backend URL:', backendUrl);
+        
         const response = await axios.get(`${backendUrl}/user/me`, {
-          withCredentials: true
+          withCredentials: true,
+          timeout: 10000, // 10 second timeout
         });
         
-        console.log('User authentication verified via cookies');
+        // console.log('User authentication verified via cookies');
+        setIsAuthenticated(true);
         // No need to store tokens in localStorage - cookies handle everything
         
       } catch (error) {
         // User is not authenticated, which is fine for public routes
-        console.log('User not authenticated via cookies:', error.response?.status || error.message);
+        // console.log('User not authenticated via cookies:', error.response?.status || error.message);
+        if (error.code === 'ERR_NETWORK' || error.message.includes('ERR_CONNECTION_REFUSED')) {
+          // console.error('❌ Cannot connect to backend server. Please ensure backend is running on', backendUrl);
+        }
+        setIsAuthenticated(false);
+      } finally {
+        setAuthChecked(true);
       }
     };
 
@@ -71,15 +84,21 @@ function AppContent({ userInfo, refreshPeople }) {
 
   // Handle refresh trigger from Dashboard
   useEffect(() => {
-    console.log("=== App.jsx refreshPeople Debug ===");
-    console.log("refreshPeople prop changed:", refreshPeople);
+    // console.log("=== App.jsx refreshPeople Debug ===");
+    // console.log("refreshPeople prop changed:", refreshPeople);
     if (refreshPeople) {
-      console.log("Incrementing peopleRefreshKey from", peopleRefreshKey, "to", peopleRefreshKey + 1);
+      // console.log("Incrementing peopleRefreshKey from", peopleRefreshKey, "to", peopleRefreshKey + 1);
       setPeopleRefreshKey(prev => prev + 1);
     }
   }, [refreshPeople]);
 
   useEffect(() => {
+    // Only fetch teams if user is authenticated
+    if (!isAuthenticated || !authChecked) {
+      // console.log("App.jsx: Skipping team fetch - not authenticated or auth not checked");
+      return;
+    }
+
     const getAllTeams = async () => {
       try {
         const response = await axios.get(`${backendUrl}/team/allTeam`, {
@@ -92,7 +111,7 @@ function AppContent({ userInfo, refreshPeople }) {
       } catch (err) {
         const storedTeams = localStorage.getItem("allTeams");
         setAllTeams(storedTeams ? JSON.parse(storedTeams) : []);
-        console.error("Failed to fetch teams:", err);
+        // console.error("Failed to fetch teams:", err);
       }
     };
 
@@ -108,7 +127,7 @@ function AppContent({ userInfo, refreshPeople }) {
     return () => {
       window.removeEventListener('navigate-to-teams', handleNavigateToTeams);
     };
-  }, []);
+  }, [isAuthenticated, authChecked]); // Add dependencies to re-run when authentication changes
 
   // Watch for changes in teams and activeTeam to auto-navigate
   useEffect(() => {
@@ -137,7 +156,7 @@ function AppContent({ userInfo, refreshPeople }) {
     let activeTeam = null;
     
     try {
-      const storedTeams = localStorage.getItem("userTeams");
+      const storedTeams = localStorage.getItem("allTeams");
       userTeams = storedTeams ? JSON.parse(storedTeams) : [];
     } catch {
       userTeams = [];
@@ -191,7 +210,7 @@ function AppContent({ userInfo, refreshPeople }) {
       case "home":
         return <Home activeTeam={activeTeam} />;
       case "teams":
-        return <TeamSection allTeams={allTeams} />;
+        return <TeamSection allTeams={allTeams} isAuthenticated={isAuthenticated} authChecked={authChecked} />;
       case "people":
         // Show NoPeopleState if no teams exist, otherwise show PeopleSection
         if (!allTeams || allTeams.length === 0) {
@@ -235,6 +254,9 @@ function AppContent({ userInfo, refreshPeople }) {
       
       {/* Toast Container for notifications */}
       <ToastContainer />
+      
+      {/* AI Bot Assistant - only show if authenticated */}
+      {isAuthenticated && authChecked && <EnhancedAIBot />}
     </div>
   );
 }

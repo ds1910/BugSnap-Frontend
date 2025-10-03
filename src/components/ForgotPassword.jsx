@@ -90,7 +90,7 @@ const ForgotPassword = () => {
 
     setLoading(true);
     try {
-      console.log("Sending password reset request for:", trimmed);
+      // console.log("Sending password reset request for:", trimmed);
       // POST to backend route that sends the reset email.
       // Axios automatically stringifies data and sets Content-Type.
       const res = await axios.post(`${backendUrl}/user/forgotPassword`, { email: trimmed }, {

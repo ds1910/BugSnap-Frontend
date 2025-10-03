@@ -73,8 +73,14 @@ const writeLocal = (arr) => {
 
 /* ----------------- TeamSection Component (merged & fixed) ----------------- */
 const TeamSection = ({ allTeams = [], isAuthenticated = false, authChecked = false }) => {
-  // initialize teams from localStorage
+  // initialize teams from props first, then localStorage as fallback
   const [teams, setTeams] = useState(() => {
+    // Use teams from props if available
+    if (allTeams && allTeams.length > 0) {
+      return allTeams;
+    }
+    
+    // Fallback to localStorage
     try {
       const stored = localStorage.getItem("allTeams");
       return stored ? JSON.parse(stored) : [];
@@ -107,11 +113,26 @@ const TeamSection = ({ allTeams = [], isAuthenticated = false, authChecked = fal
   const [toast, setToast] = useState(null);
   const showToast = (message, type = "success") => setToast({ message, type });
 
+  // Sync teams when allTeams prop changes
+  useEffect(() => {
+    if (allTeams && allTeams.length > 0) {
+      setTeams(allTeams);
+    }
+  }, [allTeams]);
+
   // ---------------- Fetch all teams (sync with localStorage fallback) ----------------
   useEffect(() => {
-    // Only fetch teams if user is authenticated
+    // Only fetch teams if user is authenticated and we don't have teams from props
     if (!isAuthenticated || !authChecked) {
       console.log("TeamSection: Skipping team fetch - not authenticated or auth not checked");
+      setIsLoading(false);
+      return;
+    }
+
+    // If we already have teams from props, don't fetch again
+    if (allTeams && allTeams.length > 0) {
+      console.log("TeamSection: Using teams from props, skipping fetch");
+      setIsLoading(false);
       return;
     }
 
@@ -144,7 +165,7 @@ const TeamSection = ({ allTeams = [], isAuthenticated = false, authChecked = fal
 
     getAllTeams();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated, authChecked]);
+  }, [isAuthenticated, authChecked, allTeams]);
 
   // ---------------- Fetch members when Add Member modal opens ----------------
   useEffect(() => {

@@ -26,7 +26,7 @@ const Login = () => {
     setLoading(true);
 
     try {
-      console.log("Attempting login with:", { email, password });
+      // console.log("Attempting login with:", { email, password });
 
       const res = await axios.post(
         `${backendUrl}/user/login`,
@@ -66,14 +66,14 @@ const Login = () => {
             return;
             
           } catch (inviteErr) {
-            console.error("Failed to process pending invitation:", inviteErr);
+            // console.error("Failed to process pending invitation:", inviteErr);
             // Continue with normal login flow if invite processing fails
           }
         }
         
         // Normal login flow
         if (!encrypted) {
-          console.warn("No encrypted payload returned from server.", res.data);
+          // console.warn("No encrypted payload returned from server.", res.data);
           navigate("/dashboard");
           return;
         }
@@ -92,7 +92,7 @@ const Login = () => {
       } else {
         setError(err.message || "An unknown error occurred");
       }
-      console.error("Login error:", err);
+      // console.error("Login error:", err);
     } finally {
       setLoading(false);
     }

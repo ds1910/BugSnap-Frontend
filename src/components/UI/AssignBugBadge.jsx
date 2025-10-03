@@ -120,7 +120,7 @@ const AssignBugBadge = ({ value, onChange, compact = false }) => {
       nameCount[user.name] = (nameCount[user.name] || 0) + 1;
     });
     const duplicates = Object.keys(nameCount).filter(name => nameCount[name] > 1);
-    console.log('📊 Duplicate name analysis:', { nameCount, duplicates });
+    // console.log('📊 Duplicate name analysis:', { nameCount, duplicates });
     return duplicates;
   }, [assignees]);
 
@@ -133,32 +133,32 @@ const AssignBugBadge = ({ value, onChange, compact = false }) => {
     
     // Enrich the value with full user data from assignees list
     const enrichedSelection = arrayValue.map(selectedItem => {
-      console.log("🔄 Processing selected item:", selectedItem);
+      // console.log("🔄 Processing selected item:", selectedItem);
       
       if (typeof selectedItem === 'string') {
         // Legacy string format - try to find matching user
         const matchingUser = assignees.find(user => user.name === selectedItem);
-        console.log("🔄 String format - found matching user:", matchingUser);
+        // console.log("🔄 String format - found matching user:", matchingUser);
         return matchingUser || { name: selectedItem, email: '', id: null, role: '' };
       } else if (selectedItem && selectedItem.name) {
         // Object format - try to find full user data and merge
         const matchingUser = assignees.find(user => {
           // Match by ID first (most reliable), then by email, then by name
           if (selectedItem.id && user.id && selectedItem.id === user.id) {
-            console.log("🔄 ID matching:", { selectedId: selectedItem.id, userId: user.id, match: true });
+            // console.log("🔄 ID matching:", { selectedId: selectedItem.id, userId: user.id, match: true });
             return true;
           }
           if (selectedItem.email && user.email && selectedItem.email !== '' && user.email !== '') {
             const emailMatch = selectedItem.email === user.email;
-            console.log("🔄 Email matching:", { selectedEmail: selectedItem.email, userEmail: user.email, match: emailMatch });
+            // console.log("🔄 Email matching:", { selectedEmail: selectedItem.email, userEmail: user.email, match: emailMatch });
             return emailMatch;
           }
           const nameMatch = selectedItem.name === user.name;
-          console.log("🔄 Name matching:", { selectedName: selectedItem.name, userName: user.name, match: nameMatch });
+          // console.log("🔄 Name matching:", { selectedName: selectedItem.name, userName: user.name, match: nameMatch });
           return nameMatch;
         });
         
-        console.log("🔄 Object format - found matching user:", matchingUser);
+        // console.log("🔄 Object format - found matching user:", matchingUser);
         
         if (matchingUser) {
           // Return the full user data from assignees list
@@ -184,13 +184,13 @@ const AssignBugBadge = ({ value, onChange, compact = false }) => {
     for (const user of enrichedSelection) {
       // Skip if we've already seen this user ID
       if (user.id && seenIds.has(user.id)) {
-        console.log("🔄 Skipping duplicate user by ID:", user);
+        // console.log("🔄 Skipping duplicate user by ID:", user);
         continue;
       }
       
       // Skip if we've already seen this email (and user has no ID)
       if (!user.id && user.email && user.email !== '' && seenEmails.has(user.email)) {
-        console.log("🔄 Skipping duplicate user by email:", user);
+        // console.log("🔄 Skipping duplicate user by email:", user);
         continue;
       }
       
@@ -200,9 +200,9 @@ const AssignBugBadge = ({ value, onChange, compact = false }) => {
       if (user.email && user.email !== '') seenEmails.add(user.email);
     }
     
-    console.log('🔄 Value sync - Original:', arrayValue);
-    console.log('🔄 Value sync - Enriched:', enrichedSelection);
-    console.log('🔄 Value sync - Deduplicated:', deduplicatedSelection);
+    // console.log('🔄 Value sync - Original:', arrayValue);
+    // console.log('🔄 Value sync - Enriched:', enrichedSelection);
+    // console.log('🔄 Value sync - Deduplicated:', deduplicatedSelection);
     
     setSelected(deduplicatedSelection);
   }, [value, assignees]); // Include assignees as dependency
@@ -216,7 +216,7 @@ const AssignBugBadge = ({ value, onChange, compact = false }) => {
         const activeTeamString = localStorage.getItem("activeTeam");
         
         if (!activeTeamString) {
-          console.warn("No active team found in localStorage");
+          // console.warn("No active team found in localStorage");
           return;
         }
 
@@ -238,12 +238,12 @@ const AssignBugBadge = ({ value, onChange, compact = false }) => {
           role: m.role || 'member',
         }));
         
-        console.log('📋 Formatted team members:', formatted);
-        console.log('📧 Email status:', formatted.map(m => ({ name: m.name, email: m.email, hasEmail: !!m.email })));
+        // console.log('📋 Formatted team members:', formatted);
+        // console.log('📧 Email status:', formatted.map(m => ({ name: m.name, email: m.email, hasEmail: !!m.email })));
         
         setAssignees(formatted);
       } catch (error) {
-        console.error("Failed to fetch assignees:", error);
+        // console.error("Failed to fetch assignees:", error);
       }
     };
 
@@ -259,24 +259,24 @@ const AssignBugBadge = ({ value, onChange, compact = false }) => {
     // Ensure selected is always an array
     const currentSelected = Array.isArray(selected) ? selected : (selected ? [selected] : []);
     
-    console.log("🔍 ASSIGNMENT DEBUG:", {
-      currentSelected: currentSelected,
-      currentLength: currentSelected.length,
-      userToToggle: user,
-      userEmail: user.email,
-      userName: user.name,
-      userHasEmail: !!user.email,
-      canAddMore: currentSelected.length < 5,
-      selectedEmails: currentSelected.map(s => typeof s === 'string' ? s : s.email),
-      selectedDetails: currentSelected.map(s => ({ 
-        name: typeof s === 'string' ? s : s.name, 
-        email: typeof s === 'string' ? 'legacy' : s.email,
-        hasEmail: typeof s === 'string' ? false : !!s.email
-      }))
-    });
+    // console.log("🔍 ASSIGNMENT DEBUG:", {
+    //   currentSelected: currentSelected,
+    //   currentLength: currentSelected.length,
+    //   userToToggle: user,
+    //   userEmail: user.email,
+    //   userName: user.name,
+    //   userHasEmail: !!user.email,
+    //   canAddMore: currentSelected.length < 5,
+    //   selectedEmails: currentSelected.map(s => typeof s === 'string' ? s : s.email),
+    //   selectedDetails: currentSelected.map(s => ({ 
+    //     name: typeof s === 'string' ? s : s.name, 
+    //     email: typeof s === 'string' ? 'legacy' : s.email,
+    //     hasEmail: typeof s === 'string' ? false : !!s.email
+    //   }))
+    // });
     
-    console.log("🔍 About to check if user is already selected...");
-    console.log("🔍 Available users in team:", assignees.map(u => ({ name: u.name, email: u.email })));
+    // console.log("🔍 About to check if user is already selected...");
+    // console.log("🔍 Available users in team:", assignees.map(u => ({ name: u.name, email: u.email })));
     
     // Use ID as primary unique identifier, EMAIL as secondary for users with same names but different emails
     const isAlreadySelected = currentSelected.some(s => {
@@ -285,38 +285,38 @@ const AssignBugBadge = ({ value, onChange, compact = false }) => {
       } else {
         // Primary: Match by ID (most reliable)
         if (s.id && user.id && s.id === user.id) {
-          console.log('🔍 ID comparison:', { 
-            selectedId: s.id, 
-            userId: user.id, 
-            match: true 
-          });
+          // console.log('🔍 ID comparison:', { 
+          //   selectedId: s.id, 
+          //   userId: user.id, 
+          //   match: true 
+          // });
           return true;
         }
         // Secondary: Match by EMAIL if both have valid emails and no ID match
         if (s.email && user.email && s.email !== '' && user.email !== '') {
           const emailMatch = s.email === user.email;
-          console.log('🔍 Email comparison:', { 
-            selectedEmail: s.email, 
-            userEmail: user.email, 
-            match: emailMatch 
-          });
+          // console.log('🔍 Email comparison:', { 
+          //   selectedEmail: s.email, 
+          //   userEmail: user.email, 
+          //   match: emailMatch 
+          // });
           return emailMatch;
         }
         // Fallback: Match by name only if no ID or email available
         if (!s.id && !user.id && (!s.email || s.email === '') && (!user.email || user.email === '')) {
           const nameMatch = s.name === user.name;
-          console.log('🔍 Name comparison (no ID/email):', { 
-            selectedName: s.name, 
-            userName: user.name, 
-            match: nameMatch 
-          });
+          // console.log('🔍 Name comparison (no ID/email):', { 
+          //   selectedName: s.name, 
+          //   userName: user.name, 
+          //   match: nameMatch 
+          // });
           return nameMatch;
         }
         return false;
       }
     });
     
-    console.log('🔍 isAlreadySelected result:', isAlreadySelected);
+    // console.log('🔍 isAlreadySelected result:', isAlreadySelected);
     
     let newSelected;
     if (isAlreadySelected) {
@@ -362,9 +362,9 @@ const AssignBugBadge = ({ value, onChange, compact = false }) => {
     
     // Trigger immediate update to parent and backend
     if (onChange) {
-      console.log("=== Assignment Update ===");
-      console.log("Previous selection:", currentSelected);
-      console.log("New selection:", newSelected);
+      // console.log("=== Assignment Update ===");
+      // console.log("Previous selection:", currentSelected);
+      // console.log("New selection:", newSelected);
       
       // Format for backend - send complete user objects for proper identification
       const backendFormat = newSelected.map(user => ({
@@ -374,8 +374,8 @@ const AssignBugBadge = ({ value, onChange, compact = false }) => {
         role: typeof user === 'string' ? '' : (user.role || 'member')
       }));
       
-      console.log("Backend format (complete objects):", backendFormat);
-      console.log("========================");
+      // console.log("Backend format (complete objects):", backendFormat);
+      // console.log("========================");
       onChange(backendFormat);
     }
   };
@@ -713,30 +713,30 @@ const AssignBugBadge = ({ value, onChange, compact = false }) => {
                             // Use EMAIL for unique identification first, then ID only if no emails
                             if (s.email && user.email && s.email !== '' && user.email !== '') {
                               const emailMatch = s.email === user.email;
-                              console.log('🔍 Available filter - Email comparison:', { 
-                                selectedEmail: s.email, 
-                                userEmail: user.email, 
-                                match: emailMatch,
-                                excluded: emailMatch
-                              });
+                              // console.log('🔍 Available filter - Email comparison:', { 
+                              //   selectedEmail: s.email, 
+                              //   userEmail: user.email, 
+                              //   match: emailMatch,
+                              //   excluded: emailMatch
+                              // });
                               return emailMatch;
                             }
                             // Only use ID if both users don't have emails
                             const idMatch = s.id && user.id && s.id === user.id;
-                            console.log('🔍 Available filter - ID comparison:', { 
-                              selectedId: s.id, 
-                              userId: user.id, 
-                              match: idMatch,
-                              excluded: idMatch
-                            });
+                            // console.log('🔍 Available filter - ID comparison:', { 
+                            //   selectedId: s.id, 
+                            //   userId: user.id, 
+                            //   match: idMatch,
+                            //   excluded: idMatch
+                            // });
                             return idMatch;
                           }
                         });
-                        console.log('🔍 Available filter result for user:', { 
-                          name: user.name, 
-                          email: user.email, 
-                          isAvailable: isAlreadySelected 
-                        });
+                        // console.log('🔍 Available filter result for user:', { 
+                        //   name: user.name, 
+                        //   email: user.email, 
+                        //   isAvailable: isAlreadySelected 
+                        // });
                         return isAlreadySelected;
                       });
 

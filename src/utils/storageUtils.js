@@ -16,7 +16,7 @@ export const safeGetFromStorage = (key, defaultValue = null) => {
     }
     return JSON.parse(item);
   } catch (error) {
-    console.warn(`Failed to parse localStorage item "${key}":`, error);
+    // console.warn(`Failed to parse localStorage item "${key}":`, error);
     return defaultValue;
   }
 };
@@ -32,7 +32,7 @@ export const safeSetToStorage = (key, value) => {
     localStorage.setItem(key, JSON.stringify(value));
     return true;
   } catch (error) {
-    console.warn(`Failed to set localStorage item "${key}":`, error);
+    // console.warn(`Failed to set localStorage item "${key}":`, error);
     return false;
   }
 };
@@ -47,7 +47,7 @@ export const safeRemoveFromStorage = (key) => {
     localStorage.removeItem(key);
     return true;
   } catch (error) {
-    console.warn(`Failed to remove localStorage item "${key}":`, error);
+    // console.warn(`Failed to remove localStorage item "${key}":`, error);
     return false;
   }
 };

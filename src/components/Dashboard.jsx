@@ -11,7 +11,7 @@ const Dashboard = () => {
   const location = useLocation();
 
   useEffect(() => {
-    console.log(window.location.href);  
+    // console.log(window.location.href);  
     const params = new URLSearchParams(location.search);
     const encryptedData = params.get("data"); 
     const inviteAccepted = params.get("inviteAccepted");
@@ -53,7 +53,7 @@ const Dashboard = () => {
 
         window.history.replaceState({}, document.title, window.location.pathname);
       } catch (err) {
-        console.error("Decryption failed", err);
+        // console.error("Decryption failed", err);
         navigate("/login");
       }
     } else if (isAuth && storedUserInfo) {

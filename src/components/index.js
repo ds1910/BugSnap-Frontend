@@ -3,10 +3,8 @@
 // ==============================
 
 // Import individual components
-
 import Topbar from "./Topbar";
+import { EnhancedAIBot } from "./Bot";
 
 // Export them together for easier imports elsewhere
-// export { Login, Dashboard, PageNotFound };
-
-export  {Topbar};
+export { Topbar, EnhancedAIBot };
