@@ -15,6 +15,7 @@ import axios from "axios";
 
 const backendUrl = import.meta.env.VITE_BACKEND_URL;
 
+// hello
 // Component that has access to SearchFilterContext
 function AppContent({ userInfo, refreshPeople }) {
   const [allTeams, setAllTeams] = useState(() => {
