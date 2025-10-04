@@ -15,9 +15,6 @@ Disallow: /upload*
 Disallow: /_next*
 Disallow: /static*
 
-# Sitemap location
-Sitemap: https://bugsnap.vercel.app/sitemap.xml
-
 # Crawl delay (helps prevent server overload)
 Crawl-delay: 1
 

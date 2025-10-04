@@ -35,7 +35,7 @@ In today's fast-paced development world, bugs are inevitable. What matters is ho
 We built BugSnap to be the **single source of truth** for all things bug-related:
 
 - 🎯 **Centralized Tracking**: All bugs, all teams, one platform
-- 💬 **Real-time Collaboration**: Instant updates, comments, and notifications
+- 💬 **Efficient Collaboration**: Organized comments, notifications, and team communication
 - 📊 **Smart Analytics**: Insights into bug patterns, team performance, and resolution times
 - 🔗 **Seamless Integration**: Works with your existing development workflow
 - 🎨 **Beautiful Interface**: Because developers deserve tools that don't hurt their eyes
@@ -55,8 +55,8 @@ We built BugSnap to be the **single source of truth** for all things bug-related
 ### 👥 **Team Collaboration**
 - **Multi-team Support**: Manage multiple projects and teams
 - **Role-based Permissions**: Admins, members, and viewers with appropriate access
-- **Real-time Comments**: Threaded discussions on each bug
-- **@Mentions & Notifications**: Never miss important updates
+- **Threaded Comments**: Organized discussions on each bug
+- **Email Notifications**: Stay updated on important changes
 - **Activity Timeline**: Complete history of all bug activities
 
 ### 📊 **Analytics & Insights**
@@ -221,37 +221,11 @@ useEffect(() => {
 
 **Lesson Learned:** Persist user preferences to maintain consistency across sessions!
 
----
 
-### 🌊 **Bug #006: The Memory Leak Hydra**
-**Date:** August 14, 2024  
-**Severity:** Critical  
-**The Story:** The real-time notification system was creating WebSocket connections without cleaning them up, causing memory leaks and eventually crashing the browser tab.
-
-```javascript
-// The Villain Code:
-useEffect(() => {
-  const ws = new WebSocket('ws://localhost:8019/notifications');
-  ws.onmessage = handleNotification;
-  // No cleanup! 💀
-}, []);
-
-// The Hero Fix:
-useEffect(() => {
-  const ws = new WebSocket('ws://localhost:8019/notifications');
-  ws.onmessage = handleNotification;
-  
-  return () => {
-    ws.close(); // Cleanup on unmount ✅
-  };
-}, []);
-```
-
-**Lesson Learned:** Always clean up side effects in useEffect cleanup functions!
 
 ---
 
-### 🎪 **Bug #007: The File Upload Circus**
+### 🎪 **Bug #006: The File Upload Circus**
 **Date:** September 3, 2024  
 **Severity:** High  
 **The Story:** Large file uploads (>10MB) would fail silently, leaving users confused about why their bug reports weren't complete. The progress bar would reach 100% but the file wouldn't actually upload.
@@ -343,32 +317,28 @@ apiClient.interceptors.response.use(
 );
 ```
 
-### 🔄 **Real-time Features**
+### 🔄 **HTTP Communication**
 
-**WebSocket Connection for Live Updates:**
+**Efficient API Communication:**
 ```javascript
-// Real-time notifications and bug updates
-const useRealTimeUpdates = () => {
-  const [socket, setSocket] = useState(null);
+// Optimized API calls with proper error handling
+const useBugUpdates = () => {
+  const [bugs, setBugs] = useState([]);
+  const [loading, setLoading] = useState(false);
   
-  useEffect(() => {
-    const ws = new WebSocket('wss://api.bugsnap.codemine.tech/ws');
-    
-    ws.onopen = () => {
-      console.log('Connected to BugSnap real-time updates');
-    };
-    
-    ws.onmessage = (event) => {
-      const update = JSON.parse(event.data);
-      handleRealTimeUpdate(update);
-    };
-    
-    setSocket(ws);
-    
-    return () => ws.close();
+  const fetchBugs = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await apiClient.get('/bugs/all');
+      setBugs(response.data.bugs);
+    } catch (error) {
+      console.error('Failed to fetch bugs:', error);
+    } finally {
+      setLoading(false);
+    }
   }, []);
   
-  return socket;
+  return { bugs, loading, fetchBugs };
 };
 ```
 
@@ -524,7 +494,6 @@ VITE_APP_NAME=BugSnap                        # Application name
 VITE_GOOGLE_CLIENT_ID=your_google_client_id  # Google OAuth
 VITE_GITHUB_CLIENT_ID=your_github_client_id  # GitHub OAuth
 VITE_CLOUDINARY_CLOUD_NAME=your_cloud_name   # File uploads
-VITE_WEBSOCKET_URL=ws://localhost:8019       # Real-time updates
 ```
 
 ---
@@ -537,7 +506,6 @@ bugsnap-frontend/
 │   ├── favicon.svg           # App favicon
 │   ├── manifest.json         # PWA manifest
 │   └── robots.txt            # SEO robots file
-├── src/
 │   ├── components/           # React components
 │   │   ├── ui/              # Reusable UI components
 │   │   │   ├── Button.jsx   # Custom button component
