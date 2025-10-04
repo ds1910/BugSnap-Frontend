@@ -58,15 +58,13 @@ const sendToAnalytics = (metricName, metric) => {
     });
   }
 
-  // Log to console in development
-  if (process.env.NODE_ENV === 'development') {
-    // console.group(`📊 ${metricName} Metric`);
-    // console.log('Value:', metric.value);
-    // console.log('Delta:', metric.delta);
-    // console.log('ID:', metric.id);
-    // console.log('Rating:', getMetricRating(metricName, metric.value));
-    console.groupEnd();
-  }
+  // Log to console for debugging
+  // console.group(`📊 ${metricName} Metric`);
+  // console.log('Value:', metric.value);
+  // console.log('Delta:', metric.delta);
+  // console.log('ID:', metric.id);
+  // console.log('Rating:', getMetricRating(metricName, metric.value));
+  // console.groupEnd();
 };
 
 // Get rating based on Core Web Vitals thresholds
@@ -169,10 +167,8 @@ export const monitorMemoryUsage = () => {
     // });
   };
 
-  // Log memory usage every 30 seconds in development
-  if (process.env.NODE_ENV === 'development') {
-    setInterval(logMemoryUsage, 30000);
-  }
+  // Log memory usage every 30 seconds
+  // Uncomment for debugging: setInterval(logMemoryUsage, 30000);
 };
 
 // Bundle analyzer helper

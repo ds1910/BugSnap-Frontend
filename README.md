@@ -283,9 +283,7 @@ BugSnap's frontend communicates with the backend through a robust REST API, crea
 ```javascript
 // API Base Configuration
 const API_CONFIG = {
-  baseURL: process.env.NODE_ENV === 'production' 
-    ? 'https://api.bugsnap.codemine.tech'
-    : 'http://localhost:8019',
+  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8019',
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json'
